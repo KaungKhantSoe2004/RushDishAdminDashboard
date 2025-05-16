@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { useState } from "react";
 import Layout from "./components/Layout";
-import Preview from "./pages/Preview";
+
 import AdminDashboard from "./pages/admin/Dashboard";
 import StoresManagement from "./pages/admin/StoresManagement";
 import StoreDetail from "./pages/admin/StoreDetail";
@@ -34,6 +34,8 @@ import DeliveryDashboard from "./pages/delivery/Dashboard";
 import DeliveryQueue from "./pages/delivery/DeliveryQueue";
 import DeliveryHistory from "./pages/delivery/DeliveryHistory";
 import DeliveryProfile from "./pages/delivery/Profile";
+import Preview from "./pages/Preview";
+import LoginPage from "./pages/login";
 
 function App() {
   // In a real app, this would come from authentication
@@ -49,8 +51,8 @@ function App() {
     <Router>
       <Routes>
         {/* Preview/Landing Page */}
-        <Route path="/" element={<Preview />} />
-
+        <Route path="/preview" element={<Preview />} />
+        <Route path="/login" element={<LoginPage />} />
         {/* Admin Routes */}
         <Route
           path="/admin/*"
