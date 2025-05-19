@@ -1,7 +1,14 @@
-import { FaShoppingBag, FaStore, FaMoneyBillWave, FaUsers, FaArrowUp, FaArrowDown } from "react-icons/fa"
-import Card from "../../components/Card"
-import Badge from "../../components/Badge"
-import Button from "../../components/Button"
+import {
+  FaShoppingBag,
+  FaStore,
+  FaMoneyBillWave,
+  FaUsers,
+  FaArrowUp,
+  FaArrowDown,
+} from "react-icons/fa";
+import Card from "../../components/Card";
+import Badge from "../../components/Badge";
+import Button from "../../components/Button";
 
 const AdminDashboard = () => {
   // Mock data
@@ -35,7 +42,7 @@ const AdminDashboard = () => {
       changeType: "increase",
       icon: <FaUsers className="text-rose-500" size={24} />,
     },
-  ]
+  ];
 
   const recentOrders = [
     {
@@ -78,7 +85,7 @@ const AdminDashboard = () => {
       amount: "$15.50",
       date: "1.5 hours ago",
     },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -106,13 +113,21 @@ const AdminDashboard = () => {
                 <div className="flex items-center mt-2">
                   <span
                     className={`text-xs font-medium flex items-center ${
-                      kpi.changeType === "increase" ? "text-green-600" : "text-red-600"
+                      kpi.changeType === "increase"
+                        ? "text-green-600"
+                        : "text-red-600"
                     }`}
                   >
-                    {kpi.changeType === "increase" ? <FaArrowUp className="mr-1" /> : <FaArrowDown className="mr-1" />}
+                    {kpi.changeType === "increase" ? (
+                      <FaArrowUp className="mr-1" />
+                    ) : (
+                      <FaArrowDown className="mr-1" />
+                    )}
                     {kpi.change}%
                   </span>
-                  <span className="text-xs text-gray-500 ml-1">vs last week</span>
+                  <span className="text-xs text-gray-500 ml-1">
+                    vs last week
+                  </span>
                 </div>
               </div>
               <div className="p-3 rounded-full bg-rose-50">{kpi.icon}</div>
@@ -125,12 +140,16 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card title="Orders Overview" className="lg:col-span-2">
           <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
-            <p className="text-gray-500">Line chart showing orders over time would go here</p>
+            <p className="text-gray-500">
+              Line chart showing orders over time would go here
+            </p>
           </div>
         </Card>
         <Card title="Popular Stores">
           <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
-            <p className="text-gray-500">Bar chart showing top stores would go here</p>
+            <p className="text-gray-500">
+              Bar chart showing top stores would go here
+            </p>
           </div>
         </Card>
       </div>
@@ -156,7 +175,9 @@ const AdminDashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -165,26 +186,37 @@ const AdminDashboard = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {recentOrders.map((order) => (
                 <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{order.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.store}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.customer}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {order.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.store}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.customer}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge
                       variant={
                         order.status === "Delivered"
                           ? "success"
-                          : order.status === "Preparing" || order.status === "On the way"
-                            ? "warning"
-                            : order.status === "Cancelled"
-                              ? "danger"
-                              : "default"
+                          : order.status === "Preparing" ||
+                            order.status === "On the way"
+                          ? "warning"
+                          : order.status === "Cancelled"
+                          ? "danger"
+                          : "default"
                       }
                     >
                       {order.status}
                     </Badge>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.amount}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.date}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.amount}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.date}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Button variant="outline" size="sm">
                       View
@@ -197,7 +229,7 @@ const AdminDashboard = () => {
         </div>
       </Card>
     </div>
-  )
-}
+  );
+};
 
-export default AdminDashboard
+export default AdminDashboard;

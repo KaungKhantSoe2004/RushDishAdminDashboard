@@ -1,7 +1,13 @@
 "use client";
 
 import { useNavigate } from "react-router-dom";
-import { FaCrown, FaStore, FaMotorcycle, FaArrowRight } from "react-icons/fa";
+import {
+  FaCrown,
+  FaStore,
+  FaMotorcycle,
+  FaArrowRight,
+  FaSignInAlt,
+} from "react-icons/fa";
 import Button from "../components/Button";
 
 const Preview = () => {
@@ -162,6 +168,16 @@ const Preview = () => {
               </Button>
             </div>
           </div>
+        </div>
+
+        <div className=" mt-16 text-center">
+          <button
+            onClick={() => navigate("/login")}
+            className="inline-flex items-center px-8 py-3 border border-transparent text-lg font-medium rounded-md shadow-sm text-rose-600 bg-white hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition-all duration-200"
+          >
+            <FaSignInAlt className="mr-3 -ml-1 h-5 w-5" />
+            Get Started Now
+          </button>
         </div>
 
         {/* Features section */}

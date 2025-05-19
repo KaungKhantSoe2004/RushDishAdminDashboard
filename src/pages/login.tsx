@@ -11,6 +11,9 @@ import {
   FaEye,
   FaEyeSlash,
 } from "react-icons/fa";
+import { useSelector } from "react-redux";
+import type { RootState } from "@reduxjs/toolkit/query";
+import { useDispatch } from "react-redux";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -20,19 +23,27 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const handleLogin = (e) => {
+  const stateUser = useSelector((state: RootState) => state.user);
+  const dispatch = useDispatch();
+  const handleLogin = (e: Event) => {
+    console.log("loggin in");
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
-    // Simulate authentication
     setTimeout(() => {
       setIsLoading(false);
+      if (!email || !password || email == "" || password == "") {
+        console.log("error");
+        return;
+      }
       // In a real app, you would verify credentials with your backend
       switch (selectedRole) {
         case "admin":
-          navigate("/admin/dashboard");
+          alert("admin dashboard");
+
+          // navigate("/admin/dashboard");
+          return;
           break;
         case "store":
           navigate("/store/dashboard");
@@ -252,6 +263,7 @@ const LoginPage = () => {
               <button
                 type="submit"
                 disabled={isLoading}
+                onClick={handleLogin}
                 className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
                   selectedRole === "admin"
                     ? "bg-rose-500 hover:bg-rose-600"
