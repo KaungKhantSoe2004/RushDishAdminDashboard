@@ -52,6 +52,7 @@ export const userSlice = createSlice({
       state.points = 0;
       state.loginCode = "";
     },
+
   },
 });
 

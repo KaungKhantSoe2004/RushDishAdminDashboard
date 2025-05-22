@@ -14,23 +14,56 @@ import {
 import { useSelector } from "react-redux";
 import type { RootState } from "@reduxjs/toolkit/query";
 import { useDispatch } from "react-redux";
+import axios from "axios";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const backendDomain: string = "http://localhost:1500";
+  console.log(backendDomain, "is backend domain");
   const [selectedRole, setSelectedRole] = useState("admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const stateUser = useSelector((state: RootState) => state.user);
   const dispatch = useDispatch();
-  const handleLogin = (e: Event) => {
+  const user = useSelector((state: RootState) => state.user);
+
+  const adminHandler = async (
+    email: string,
+    password: string
+  ): Promise<void> => {
+    try {
+      const response = await axios.post(
+        `${backendDomain}/api/admin/adminLogin`,
+        JSON.stringify({ email, password }),
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.status == 200) {
+        setIsLoading(false);
+        navigate("/admin/dashboard");
+      }
+    } catch (error: Error | any) {
+      if (error.response.data.message) {
+        setIsLoading(false);
+        setError(error.response.data.message);
+        console.log("it is ok bro");
+      }
+    }
+  };
+
+  const handleLogin = async (e: Event) => {
     console.log("loggin in");
     e.preventDefault();
     setIsLoading(true);
     setError("");
-
+    // dispatch({});
     setTimeout(() => {
       setIsLoading(false);
       if (!email || !password || email == "" || password == "") {
@@ -40,11 +73,9 @@ const LoginPage = () => {
       // In a real app, you would verify credentials with your backend
       switch (selectedRole) {
         case "admin":
-          alert("admin dashboard");
-
-          // navigate("/admin/dashboard");
-          return;
+          adminHandler(email, password);
           break;
+
         case "store":
           navigate("/store/dashboard");
           break;

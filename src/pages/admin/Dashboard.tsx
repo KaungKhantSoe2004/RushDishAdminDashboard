@@ -9,8 +9,39 @@ import {
 import Card from "../../components/Card";
 import Badge from "../../components/Badge";
 import Button from "../../components/Button";
-
+import { useEffect, useState } from "react";
+import axios from "axios";
+import checkAuth from "../../helpers/checkAuth";
+import { useNavigate } from "react-router-dom";
+import InternalServerError from "../error/500";
 const AdminDashboard = () => {
+  const [isServerError, setIsServerError] = useState(false);
+  const backendDomainName: string = "http://localhost:1500";
+  const navigate = useNavigate();
+
+  const fetchApi = async () => {
+    try {
+      const tokenStatus = await checkAuth();
+      if (!tokenStatus) {
+        navigate("/login");
+
+        return;
+      }
+      const response = await axios.get(
+        `${backendDomainName}/api/admin/dashboard`,
+        {
+          withCredentials: true,
+        }
+      );
+      console.log(response.data, "is response data");
+    } catch (error) {
+      console.error("Error in fetchApi:", error);
+      setIsServerError(true);
+    }
+  };
+  useEffect(() => {
+    fetchApi();
+  }, []);
   // Mock data
   const kpiData = [
     {
@@ -87,7 +118,9 @@ const AdminDashboard = () => {
     },
   ];
 
-  return (
+  return isServerError ? (
+    <InternalServerError />
+  ) : (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
@@ -137,15 +170,15 @@ const AdminDashboard = () => {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card title="Orders Overview" className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+        {/* <Card title="Orders Overview" className="lg:col-span-2">
           <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
             <p className="text-gray-500">
               Line chart showing orders over time would go here
             </p>
           </div>
-        </Card>
-        <Card title="Popular Stores">
+        </Card> */}
+        <Card title="Top 5 Popular Stores">
           <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
             <p className="text-gray-500">
               Bar chart showing top stores would go here
