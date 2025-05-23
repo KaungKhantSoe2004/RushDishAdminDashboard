@@ -36,6 +36,8 @@ import DeliveryHistory from "./pages/delivery/DeliveryHistory";
 import DeliveryProfile from "./pages/delivery/Profile";
 import Preview from "./pages/Preview";
 import LoginPage from "./pages/login";
+import DeliveryView from "./pages/admin/deliveryView";
+import AssignArea from "./pages/admin/DeliveryAssignArea";
 
 function App() {
   // In a real app, this would come from authentication
@@ -51,7 +53,7 @@ function App() {
     <Router>
       <Routes>
         {/* Preview/Landing Page */}
-        <Route path="/preview" element={<Preview />} />
+        <Route path="/" element={<Preview />} />
         <Route path="/login" element={<LoginPage />} />
         {/* Admin Routes */}
         <Route
@@ -66,6 +68,8 @@ function App() {
                   path="/delivery-staff"
                   element={<DeliveryStaffManagement />}
                 />
+                <Route path="/delivery/view/:id" element={<DeliveryView />} />
+                <Route path="delivery/area/:id" element={<AssignArea />} />
                 <Route path="/orders" element={<OrdersManagement />} />
                 <Route path="/orders/:id" element={<OrderDetail />} />
                 <Route path="/users" element={<UserManagement />} />

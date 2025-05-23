@@ -50,10 +50,12 @@ const LoginPage = () => {
         navigate("/admin/dashboard");
       }
     } catch (error: Error | any) {
+      console.log(error);
       if (error.response.data.message) {
         setIsLoading(false);
         setError(error.response.data.message);
-        console.log("it is ok bro");
+      } else {
+        setError("Internal Server Error");
       }
     }
   };

@@ -9,10 +9,19 @@ import {
   FaSignInAlt,
 } from "react-icons/fa";
 import Button from "../components/Button";
+import { useEffect } from "react";
+import checkAuth from "../helpers/checkAuth";
 
 const Preview = () => {
   const navigate = useNavigate();
-
+  useEffect(() => {
+    const isLoggedIn: boolean = checkAuth();
+    if (isLoggedIn) {
+      
+    } else {
+      return;
+    }
+  }, []);
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}

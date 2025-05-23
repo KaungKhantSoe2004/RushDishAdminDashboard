@@ -11,17 +11,34 @@ import Badge from "../../components/Badge";
 import Button from "../../components/Button";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import checkAuth from "../../helpers/checkAuth";
+import checkAuth, {
+  type ReturnType,
+  type UserType,
+} from "../../helpers/checkAuth";
 import { useNavigate } from "react-router-dom";
 import InternalServerError from "../error/500";
+import dayjs from "dayjs";
 const AdminDashboard = () => {
   const [isServerError, setIsServerError] = useState(false);
+  const [orderCountToday, setOrdersCountToday] = useState(0);
+  const [ordersToday, setOrdersToday] = useState([]);
+  const [storeCount, setStoreCount] = useState(0);
+  const [activeUsersCount, setActiveUsersCount] = useState(0);
+  const [popularStores, setPopularStores] = useState([]);
   const backendDomainName: string = "http://localhost:1500";
+  // const [recentOrders, setRecentOrders] = [];
+  // const { userData, setUserData } = useState<UserType | null>(null);
   const navigate = useNavigate();
 
   const fetchApi = async () => {
     try {
-      const tokenStatus = await checkAuth();
+      const result = await checkAuth();
+      const tokenStatus: boolean = result.status;
+      const myUserData: UserType | undefined = result.data;
+      console.log(myUserData);
+      if (myUserData != undefined && myUserData.role !== "admin") {
+        navigate("/login");
+      }
       if (!tokenStatus) {
         navigate("/login");
 
@@ -34,6 +51,11 @@ const AdminDashboard = () => {
         }
       );
       console.log(response.data, "is response data");
+      setActiveUsersCount(response.data.activeUsers.length);
+      setStoreCount(response.data.storeCount);
+      setOrdersCountToday(response.data.ordersToday.length);
+      setOrdersToday(response.data.ordersToday);
+      setPopularStores(response.data.randomFiveStores);
     } catch (error) {
       console.error("Error in fetchApi:", error);
       setIsServerError(true);
@@ -46,14 +68,14 @@ const AdminDashboard = () => {
   const kpiData = [
     {
       title: "Orders Today",
-      value: 156,
+      value: orderCountToday,
       change: 12.5,
       changeType: "increase",
       icon: <FaShoppingBag className="text-rose-500" size={24} />,
     },
     {
       title: "Total Stores",
-      value: 43,
+      value: storeCount,
       change: 4.2,
       changeType: "increase",
       icon: <FaStore className="text-rose-500" size={24} />,
@@ -67,7 +89,7 @@ const AdminDashboard = () => {
     },
     {
       title: "Active Users",
-      value: 2.1,
+      value: activeUsersCount,
       suffix: "k",
       change: 8.3,
       changeType: "increase",
@@ -125,10 +147,10 @@ const AdminDashboard = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm">
+          {/* <Button variant="outline" size="sm">
             Export
           </Button>
-          <Button size="sm">View Reports</Button>
+          <Button size="sm">View Reports</Button> */}
         </div>
       </div>
 
@@ -171,18 +193,74 @@ const AdminDashboard = () => {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-        {/* <Card title="Orders Overview" className="lg:col-span-2">
-          <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
-            <p className="text-gray-500">
-              Line chart showing orders over time would go here
-            </p>
-          </div>
-        </Card> */}
         <Card title="Top 5 Popular Stores">
-          <div className="h-80 flex items-center justify-center bg-gray-50 rounded-lg">
-            <p className="text-gray-500">
-              Bar chart showing top stores would go here
-            </p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Store
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Store Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Customer Count
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Address
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {popularStores?.map((store, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                        {store.store_image ? (
+                          <img
+                            src={store.store_image || "/placeholder.svg"}
+                            alt={`${store.store_name} profile`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FaStore className="text-gray-400" size={24} />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {store.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {store.order_count ||
+                        Math.floor(Math.random() * 500) + 100}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                      {store.address_one ||
+                        `${
+                          Math.floor(Math.random() * 1000) + 1
+                        } Main St, City, State`}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge
+                        variant={
+                          store.status === "Active" || !store.status
+                            ? "success"
+                            : store.status === "Pending"
+                            ? "warning"
+                            : "danger"
+                        }
+                      >
+                        {store.status || "Active"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
       </div>
@@ -217,13 +295,13 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recentOrders.map((order) => (
+              {ordersToday?.map((order) => (
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {order.id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.store}
+                    {order.store_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {order.customer}
@@ -245,10 +323,10 @@ const AdminDashboard = () => {
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.amount}
+                    {order.total_amount}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.date}
+                    {dayjs(order.created_at).format("YYYY-MM-DD HH:mm:ss")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Button variant="outline" size="sm">
