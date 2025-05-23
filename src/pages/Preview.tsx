@@ -14,13 +14,30 @@ import checkAuth from "../helpers/checkAuth";
 
 const Preview = () => {
   const navigate = useNavigate();
-  useEffect(() => {
-    const isLoggedIn: boolean = checkAuth();
-    if (isLoggedIn) {
-      
-    } else {
-      return;
+  const fetchApi = async () => {
+    try {
+      const result = await checkAuth();
+      console.log(result);
+      if (result.status == true) {
+        if (result.data && result.data.role == "delivery_agent") {
+          navigate("/delivery/dashboard");
+          return;
+        } else if (result.data && result.data.role == "store") {
+          navigate("/store/dashboard");
+          return;
+        } else if (result.data && result.data.role == "admin") {
+          navigate("/admin/dashboard");
+          return;
+        } else {
+          return;
+        }
+      }
+    } catch (error) {
+      console.log(error, "is error");
     }
+  };
+  useEffect(() => {
+    fetchApi();
   }, []);
   return (
     <div className="min-h-screen bg-gray-50">

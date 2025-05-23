@@ -1,15 +1,18 @@
 import { configureStore } from "@reduxjs/toolkit";
-import { userSlice } from "./features/userSlice";
-import { storeSlice } from "./features/storeSlice";
-import deliverySlice from "./features/deliverySlice";
-import OrderSlice from "./features/ordersSlice";
 
+import deliverySlice from "./features/admin/deliverySlice";
+import OrderSlice from "./features/admin/ordersSlice";
+import storeSlice from "./features/admin/storeSlice";
+import adminSlice from "./features/admin/adminSlice";
+import userSlice from "./features/admin/usersSlice";
 export const store = configureStore({
   reducer: {
-    user: userSlice,
+    admin: adminSlice,
     store: storeSlice,
     delivery: deliverySlice,
     orders: OrderSlice,
+    users: userSlice,
+    // admin Slice
   },
 });
 export type RootState = ReturnType<typeof store.getState>;

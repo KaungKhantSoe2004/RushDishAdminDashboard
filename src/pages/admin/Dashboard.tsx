@@ -11,23 +11,44 @@ import Badge from "../../components/Badge";
 import Button from "../../components/Button";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import checkAuth, {
-  type ReturnType,
-  type UserType,
-} from "../../helpers/checkAuth";
+import checkAuth, { type UserType } from "../../helpers/checkAuth";
 import { useNavigate } from "react-router-dom";
 import InternalServerError from "../error/500";
 import dayjs from "dayjs";
+import { useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../store";
+import {
+  setReduxPopularStores,
+  setReduxStoreCount,
+} from "../../features/admin/storeSlice";
+import {
+  setReduxOrdersToday,
+  setReduxRecentOrders,
+} from "../../features/admin/ordersSlice";
+import { setReduxActiveUserCount } from "../../features/admin/usersSlice";
+
 const AdminDashboard = () => {
+  const dispatch = useDispatch();
+  const StoredOrders = useSelector((store: RootState) => store.orders);
+  const StoredStores = useSelector((store: RootState) => store.store);
+  const StoredUsers = useSelector((store: RootState) => store.users);
   const [isServerError, setIsServerError] = useState(false);
-  const [orderCountToday, setOrdersCountToday] = useState(0);
-  const [ordersToday, setOrdersToday] = useState([]);
-  const [storeCount, setStoreCount] = useState(0);
-  const [activeUsersCount, setActiveUsersCount] = useState(0);
-  const [popularStores, setPopularStores] = useState([]);
+  const [orderCountToday, setOrdersCountToday] = useState(
+    StoredOrders.ordersCountToday
+  );
+
+  const [recentOrders, setRecentOrders] = useState(StoredOrders.recentOrders);
+  const [storeCount, setStoreCount] = useState<number>(
+    StoredStores.totalStoresCount
+  );
+  const [activeUsersCount, setActiveUsersCount] = useState(
+    StoredUsers.activeUsersCount
+  );
+  const [popularStores, setPopularStores] = useState(
+    StoredStores.popularStores
+  );
   const backendDomainName: string = "http://localhost:1500";
-  // const [recentOrders, setRecentOrders] = [];
-  // const { userData, setUserData } = useState<UserType | null>(null);
   const navigate = useNavigate();
 
   const fetchApi = async () => {
@@ -35,7 +56,6 @@ const AdminDashboard = () => {
       const result = await checkAuth();
       const tokenStatus: boolean = result.status;
       const myUserData: UserType | undefined = result.data;
-      console.log(myUserData);
       if (myUserData != undefined && myUserData.role !== "admin") {
         navigate("/login");
       }
@@ -50,11 +70,18 @@ const AdminDashboard = () => {
           withCredentials: true,
         }
       );
-      console.log(response.data, "is response data");
+      console.log(response.data);
+      dispatch(setReduxPopularStores(response.data.randomFiveStores));
+      dispatch(setReduxStoreCount(response.data.storeCount));
+      dispatch(setReduxOrdersToday(response.data.todayOrdersCount));
+      dispatch(setReduxRecentOrders(response.data.recentOrders));
+      dispatch(setReduxActiveUserCount(response.data.activeUsers.length));
       setActiveUsersCount(response.data.activeUsers.length);
+
       setStoreCount(response.data.storeCount);
-      setOrdersCountToday(response.data.ordersToday.length);
-      setOrdersToday(response.data.ordersToday);
+      setOrdersCountToday(response.data.todayOrdersCount);
+      setRecentOrders(response.data.recentOrders);
+
       setPopularStores(response.data.randomFiveStores);
     } catch (error) {
       console.error("Error in fetchApi:", error);
@@ -64,7 +91,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchApi();
   }, []);
-  // Mock data
+
   const kpiData = [
     {
       title: "Orders Today",
@@ -90,53 +117,10 @@ const AdminDashboard = () => {
     {
       title: "Active Users",
       value: activeUsersCount,
-      suffix: "k",
+      suffix: "",
       change: 8.3,
       changeType: "increase",
       icon: <FaUsers className="text-rose-500" size={24} />,
-    },
-  ];
-
-  const recentOrders = [
-    {
-      id: "#ORD-5331",
-      store: "Burger King",
-      customer: "John Smith",
-      status: "Delivered",
-      amount: "$24.50",
-      date: "10 min ago",
-    },
-    {
-      id: "#ORD-5330",
-      store: "Pizza Hut",
-      customer: "Sarah Johnson",
-      status: "Preparing",
-      amount: "$36.00",
-      date: "25 min ago",
-    },
-    {
-      id: "#ORD-5329",
-      store: "Taco Bell",
-      customer: "Michael Brown",
-      status: "Cancelled",
-      amount: "$18.75",
-      date: "45 min ago",
-    },
-    {
-      id: "#ORD-5328",
-      store: "KFC",
-      customer: "Emily Davis",
-      status: "Delivered",
-      amount: "$29.25",
-      date: "1 hour ago",
-    },
-    {
-      id: "#ORD-5327",
-      store: "Subway",
-      customer: "David Wilson",
-      status: "On the way",
-      amount: "$15.50",
-      date: "1.5 hours ago",
     },
   ];
 
@@ -146,12 +130,7 @@ const AdminDashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <div className="flex space-x-2">
-          {/* <Button variant="outline" size="sm">
-            Export
-          </Button>
-          <Button size="sm">View Reports</Button> */}
-        </div>
+        <div className="flex space-x-2"></div>
       </div>
 
       {/* KPI Cards */}
@@ -295,7 +274,7 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {ordersToday?.map((order) => (
+              {recentOrders?.map((order) => (
                 <tr key={order.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {order.id}

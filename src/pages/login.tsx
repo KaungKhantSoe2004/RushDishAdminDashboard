@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaCrown,
@@ -11,10 +11,9 @@ import {
   FaEye,
   FaEyeSlash,
 } from "react-icons/fa";
-import { useSelector } from "react-redux";
-import type { RootState } from "@reduxjs/toolkit/query";
-import { useDispatch } from "react-redux";
+
 import axios from "axios";
+import checkAuth from "../helpers/checkAuth";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -26,8 +25,6 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const dispatch = useDispatch();
-  const user = useSelector((state: RootState) => state.user);
 
   const adminHandler = async (
     email: string,
@@ -113,7 +110,31 @@ const LoginPage = () => {
       color: "bg-green-500",
     },
   ];
-
+  const fetchApi = async () => {
+    try {
+      const result = await checkAuth();
+      console.log(result);
+      if (result.status == true) {
+        if (result.data && result.data.role == "delivery_agent") {
+          navigate("/delivery/dashboard");
+          return;
+        } else if (result.data && result.data.role == "store") {
+          navigate("/store/dashboard");
+          return;
+        } else if (result.data && result.data.role == "admin") {
+          navigate("/admin/dashboard");
+          return;
+        } else {
+          return;
+        }
+      }
+    } catch (error) {
+      console.log(error, "is error");
+    }
+  };
+  useEffect(() => {
+    fetchApi();
+  }, []);
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">

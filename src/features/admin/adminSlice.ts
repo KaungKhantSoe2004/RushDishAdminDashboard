@@ -1,6 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-interface StoreState {
+interface UserState {
   name: string;
   phoneOne: number;
   phoneTwo: number;
@@ -12,7 +12,8 @@ interface StoreState {
   points: number;
   loginCode: string;
 }
-const initialState: StoreState = {
+
+const initialState: UserState = {
   name: "",
   email: "",
   phoneOne: 900000,
@@ -25,11 +26,11 @@ const initialState: StoreState = {
   loginCode: "",
 };
 
-export const storeSlice = createSlice({
-  name: "user",
+const userSlice = createSlice({
+  name: "admin",
   initialState,
   reducers: {
-    setStore: (state, action): void => {
+    setUser: (state, action) => {
       state.name = action.payload.name;
       state.email = action.payload.email;
       state.phoneOne = action.payload.phoneOne;
@@ -41,7 +42,7 @@ export const storeSlice = createSlice({
       state.points = action.payload.points;
       state.loginCode = action.payload.loginCode;
     },
-    storeLogout: (state): void => {
+    logout: (state) => {
       state.name = "";
       state.phoneOne = 0;
       state.phoneTwo = 0;
@@ -55,5 +56,8 @@ export const storeSlice = createSlice({
   },
 });
 
-export const { setStore, storeLogout } = storeSlice.actions;
-export default storeSlice.reducer;
+// ✅ Export actions
+export const { setUser, logout } = userSlice.actions;
+
+// ✅ Export reducer only
+export default userSlice.reducer;

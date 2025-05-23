@@ -40,4 +40,4 @@ export const deliverySlice = createSlice({
     },
   },
 });
-export default deliverySlice;
+export default deliverySlice.reducer;

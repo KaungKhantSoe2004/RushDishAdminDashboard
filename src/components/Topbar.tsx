@@ -1,18 +1,37 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { FaBars, FaSearch, FaBell, FaUserCircle, FaSignOutAlt, FaCog, FaQuestionCircle } from "react-icons/fa"
+import { useState } from "react";
+import {
+  FaBars,
+  FaSearch,
+  FaBell,
+  FaUserCircle,
+  FaSignOutAlt,
+  FaCog,
+  FaQuestionCircle,
+} from "react-icons/fa";
+import logout from "../helpers/logout";
+import { useNavigate } from "react-router-dom";
 
 interface TopbarProps {
-  toggleSidebar: () => void
-  userRole: "admin" | "store" | "delivery"
-  onRoleChange: (role: "admin" | "store" | "delivery") => void
+  toggleSidebar: () => void;
+  userRole: "admin" | "store" | "delivery";
+  onRoleChange: (role: "admin" | "store" | "delivery") => void;
 }
 
 const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const navigate = useNavigate();
+  const signOut = async () => {
+    console.log("singing out");
+    const logoutStatus = await logout();
+    if (logoutStatus == true) {
+      navigate("/login");
+    } else {
+      return;
+    }
+  };
   return (
     <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:px-6">
       {/* Left section */}
@@ -39,7 +58,9 @@ const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
         <div className="hidden md:block">
           <select
             value={userRole}
-            onChange={(e) => onRoleChange(e.target.value as "admin" | "store" | "delivery")}
+            onChange={(e) =>
+              onRoleChange(e.target.value as "admin" | "store" | "delivery")
+            }
             className="rounded-md border border-gray-300 py-1 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
           >
             <option value="admin">Admin</option>
@@ -67,14 +88,21 @@ const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {[1, 2, 3].map((item) => (
-                  <div key={item} className="px-4 py-2 hover:bg-gray-50 border-b">
-                    <p className="text-sm text-gray-800">New order received from Store #{item}</p>
+                  <div
+                    key={item}
+                    className="px-4 py-2 hover:bg-gray-50 border-b"
+                  >
+                    <p className="text-sm text-gray-800">
+                      New order received from Store #{item}
+                    </p>
                     <p className="text-xs text-gray-500">2 min ago</p>
                   </div>
                 ))}
               </div>
               <div className="px-4 py-2 text-center">
-                <button className="text-sm text-rose-600 hover:text-rose-700">View all notifications</button>
+                <button className="text-sm text-rose-600 hover:text-rose-700">
+                  View all notifications
+                </button>
               </div>
             </div>
           )}
@@ -87,7 +115,9 @@ const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
             className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100"
           >
             <FaUserCircle className="text-gray-500 text-xl" />
-            <span className="hidden md:inline text-sm font-medium text-gray-700">John Doe</span>
+            <span className="hidden md:inline text-sm font-medium text-gray-700">
+              John Doe
+            </span>
           </button>
 
           {dropdownOpen && (
@@ -105,7 +135,12 @@ const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
                 Help
               </button>
               <div className="border-t my-1"></div>
-              <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+              <button
+                onClick={() => {
+                  signOut();
+                }}
+                className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
                 <FaSignOutAlt className="mr-2 text-gray-500" />
                 Sign out
               </button>
@@ -114,7 +149,7 @@ const Topbar = ({ toggleSidebar, userRole, onRoleChange }: TopbarProps) => {
         </div>
       </div>
     </header>
-  )
-}
+  );
+};
 
-export default Topbar
+export default Topbar;

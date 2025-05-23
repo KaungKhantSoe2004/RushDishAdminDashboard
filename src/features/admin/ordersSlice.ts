@@ -56,6 +56,7 @@ interface stateType {
   ordersCountToday: number;
   recentOrders: Array<RecentOrderType>;
   orders: Array<RecentOrderType>;
+
   totalOrders: number;
   deliveredOrders: number;
   porgressOrders: number;
@@ -65,6 +66,7 @@ const initialState: stateType = {
   ordersCountToday: 0,
   recentOrders: [],
   orders: [],
+
   totalOrders: 0,
   deliveredOrders: 0,
   porgressOrders: 0,
@@ -81,8 +83,20 @@ const OrderSlice = createSlice({
       state.cancelledOrders = action.payload.cancelledOrders;
     },
     setDashboardCount: (state, action): void => {
-      state.ordersCountToday = action.payload.todayOrdersCount;
+      state.ordersCountToday = action.payload;
+    },
+    setReduxOrdersToday: (state, action): void => {
+      state.ordersCountToday = action.payload;
+    },
+    setReduxRecentOrders: (state, action): void => {
+      state.recentOrders = action.payload;
     },
   },
 });
-export default OrderSlice;
+export const {
+  setOrdersPageCount,
+  setDashboardCount,
+  setReduxOrdersToday,
+  setReduxRecentOrders,
+} = OrderSlice.actions;
+export default OrderSlice.reducer;
