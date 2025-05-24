@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import type React from "react";
+
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaSearch,
@@ -16,113 +18,100 @@ import {
   FaUser,
   FaEnvelope,
   FaPhone,
+  FaLock,
+  FaPhoneAlt,
+  FaUserTag,
+  FaImage,
+  FaUpload,
+  FaSpinner,
+  FaChevronDown,
+  FaClock,
 } from "react-icons/fa";
+import checkAuth, { type UserType } from "../../helpers/checkAuth";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import InternalServerError from "../error/500";
+import {
+  setReduxStorePageStoreCount,
+  setStore,
+} from "../../features/admin/storeSlice";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../store";
+
+interface Store {
+  id: string;
+  profile: string | null;
+  name: string;
+  owner: string;
+  email: string;
+  location: string;
+  status: "Active" | "Pending" | "Suspended";
+  rating: number;
+}
+
+interface NewStore {
+  name: string;
+  owner: string;
+  email: string;
+  password: string;
+  phoneOne: string;
+  phoneTwo: string;
+  addressOne: string;
+  addressTwo: string;
+  role: string;
+  rating: number;
+  profileImg: File | null;
+}
+
+interface FormErrors {
+  [key: string]: string;
+}
 
 const StoresManagement = () => {
+  const backendDomainName: string = "http://localhost:1500";
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const ReduxStores = useSelector((store: RootState) => store.store);
+  const [isServerError, setIsServerError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewStoreModal, setShowNewStoreModal] = useState(false);
-  const [newStore, setNewStore] = useState({
+  const [pages, setPages] = useState([1]);
+  const [loadingStoreId, setLoadingStoreId] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [newStore, setNewStore] = useState<NewStore>({
     name: "",
-    city: "",
     owner: "",
-    address: "",
-    phone: "",
     email: "",
-    description: "",
+    password: "",
+    phoneOne: "",
+    phoneTwo: "",
+    addressOne: "",
+    addressTwo: "",
+    role: "",
+    rating: 0,
+    profileImg: null,
   });
-  const [errors, setErrors] = useState({});
-
-  // Mock data
-  const stores = [
-    {
-      id: 1,
-      name: "Burger King",
-      city: "New York",
-      status: "Active",
-      owner: "John Smith",
-      rating: 4.5,
-    },
-    {
-      id: 2,
-      name: "Pizza Hut",
-      city: "Los Angeles",
-      status: "Active",
-      owner: "Sarah Johnson",
-      rating: 4.2,
-    },
-    {
-      id: 3,
-      name: "Taco Bell",
-      city: "Chicago",
-      status: "Pending",
-      owner: "Michael Brown",
-      rating: 0,
-    },
-    {
-      id: 4,
-      name: "KFC",
-      city: "Houston",
-      status: "Active",
-      owner: "Emily Davis",
-      rating: 3.8,
-    },
-    {
-      id: 5,
-      name: "Subway",
-      city: "Phoenix",
-      status: "Suspended",
-      owner: "David Wilson",
-      rating: 3.5,
-    },
-    {
-      id: 6,
-      name: "McDonald's",
-      city: "Philadelphia",
-      status: "Active",
-      owner: "Lisa Anderson",
-      rating: 4.0,
-    },
-    {
-      id: 7,
-      name: "Wendy's",
-      city: "San Antonio",
-      status: "Pending",
-      owner: "Robert Martinez",
-      rating: 0,
-    },
-    {
-      id: 8,
-      name: "Chipotle",
-      city: "San Diego",
-      status: "Active",
-      owner: "Jennifer Taylor",
-      rating: 4.3,
-    },
-    {
-      id: 9,
-      name: "Domino's",
-      city: "Dallas",
-      status: "Suspended",
-      owner: "James Thomas",
-      rating: 2.9,
-    },
-    {
-      id: 10,
-      name: "Starbucks",
-      city: "San Jose",
-      status: "Active",
-      owner: "Patricia Garcia",
-      rating: 4.1,
-    },
-  ];
+  const [totalStoresCount, setTotalStoresCount] = useState(
+    ReduxStores.totalStoresCount
+  );
+  const [activeStoresCount, setActiveStoresCount] = useState(
+    ReduxStores.activeStoresCount
+  );
+  const [pendingStoresCount, setPendingStoresCount] = useState(
+    ReduxStores.pendingStoresCount
+  );
+  const [suspendedStoresCount, setSuspendedStoresCount] = useState(
+    ReduxStores.suspendStoresCount
+  );
+  const [stores, setStores] = useState<Store[]>(ReduxStores.stores);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   // Filter stores based on search term and status filter
   const filteredStores = stores.filter((store) => {
     const matchesSearch =
       store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      store.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      store.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
       store.owner.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
@@ -132,70 +121,221 @@ const StoresManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewStore({
-      ...newStore,
-      [name]: value,
-    });
+  // Handle store status change with proper state isolation
+  const handleStatusChange = async (
+    storeId: string,
+    newStatus: "Active" | "Pending" | "Suspended"
+  ) => {
+    // Prevent multiple simultaneous updates
+    if (loadingStoreId) return;
 
-    // Clear error for this field when user types
+    setLoadingStoreId(storeId);
+    setOpenDropdownId(null);
+
+    try {
+      const response = await axios.put(
+        `${backendDomainName}/api/admin/stores/${storeId}/status`,
+        { status: newStatus },
+        { withCredentials: true }
+      );
+
+      if (response.status === 200) {
+        // Create new stores array with updated store
+        const updatedStores = stores.map((store) =>
+          store.id === storeId ? { ...store, status: newStatus } : store
+        );
+
+        // Update local state
+        setStores(updatedStores);
+
+        // Update Redux state
+        dispatch(setStore(updatedStores));
+
+        // Recalculate counts
+        const newCounts = {
+          active: updatedStores.filter((s) => s.status === "Active").length,
+          pending: updatedStores.filter((s) => s.status === "Pending").length,
+          suspended: updatedStores.filter((s) => s.status === "Suspended")
+            .length,
+          total: updatedStores.length,
+        };
+
+        setActiveStoresCount(newCounts.active);
+        setPendingStoresCount(newCounts.pending);
+        setSuspendedStoresCount(newCounts.suspended);
+        setTotalStoresCount(newCounts.total);
+
+        dispatch(setReduxStorePageStoreCount(newCounts));
+
+        // Show success message
+        const actionText =
+          newStatus === "Active"
+            ? "activated"
+            : newStatus === "Suspended"
+            ? "suspended"
+            : "set to pending";
+        alert(`Store ${actionText} successfully!`);
+      }
+    } catch (error) {
+      console.error("Error updating store status:", error);
+      alert("Failed to update store status. Please try again.");
+    } finally {
+      setLoadingStoreId(null);
+    }
+  };
+
+  // Handle dropdown toggle with better event management
+  const handleDropdownToggle = (e: React.MouseEvent, storeId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    // Close if same dropdown is clicked, open if different
+    if (openDropdownId === storeId) {
+      setOpenDropdownId(null);
+    } else {
+      setOpenDropdownId(storeId);
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setNewStore((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Clear error when user starts typing
     if (errors[name]) {
-      setErrors({
-        ...errors,
-        [name]: null,
-      });
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  // Handle file upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type and size
+      if (!file.type.match("image.*")) {
+        setErrors((prev) => ({
+          ...prev,
+          profileImg: "Please select an image file",
+        }));
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        setErrors((prev) => ({
+          ...prev,
+          profileImg: "File size should be less than 5MB",
+        }));
+        return;
+      }
+
+      setNewStore((prev) => ({
+        ...prev,
+        profileImg: file,
+      }));
+
+      // Clear any previous errors
+      if (errors.profileImg) {
+        setErrors((prev) => ({
+          ...prev,
+          profileImg: "",
+        }));
+      }
     }
   };
 
   const validateForm = () => {
-    const newErrors = {};
+    const newErrors: FormErrors = {};
 
     if (!newStore.name.trim()) newErrors.name = "Store name is required";
-    if (!newStore.city.trim()) newErrors.city = "City is required";
     if (!newStore.owner.trim()) newErrors.owner = "Owner name is required";
     if (!newStore.email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/\S+@\S+\.\S+/.test(newStore.email)) {
       newErrors.email = "Email is invalid";
     }
-    if (!newStore.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    } else if (!/^\d{10}$/.test(newStore.phone.replace(/\D/g, ""))) {
-      newErrors.phone = "Phone number is invalid";
-    }
+    if (!newStore.password) newErrors.password = "Password is required";
+    if (!newStore.phoneOne.trim())
+      newErrors.phoneOne = "Primary phone is required";
+    if (!newStore.addressOne.trim())
+      newErrors.addressOne = "Primary address is required";
+    if (!newStore.role) newErrors.role = "Role is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  // Form submission handler
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (validateForm()) {
-      // Here you would typically send the data to your API
-      console.log("Submitting new store:", newStore);
+    if (!validateForm()) {
+      return;
+    }
 
-      // For demo purposes, we'll just close the modal
-      setShowNewStoreModal(false);
+    try {
+      const formData = new FormData();
+      formData.append("name", newStore.name);
+      formData.append("owner", newStore.owner);
+      formData.append("email", newStore.email);
+      formData.append("password", newStore.password);
+      formData.append("phoneOne", newStore.phoneOne);
+      formData.append("phoneTwo", newStore.phoneTwo || "");
+      formData.append("addressOne", newStore.addressOne);
+      formData.append("addressTwo", newStore.addressTwo || "");
+      formData.append("role", newStore.role);
+      formData.append("rating", newStore.rating.toString());
+      if (newStore.profileImg) {
+        formData.append("storeLogo", newStore.profileImg);
+      }
 
-      // Reset the form
-      setNewStore({
-        name: "",
-        city: "",
-        owner: "",
-        address: "",
-        phone: "",
-        email: "",
-        description: "",
-      });
+      // Submit to your API endpoint
+      const response = await axios.post(
+        `${backendDomainName}/api/admin/addStore`,
+        formData,
+        {
+          withCredentials: true,
+        }
+      );
 
-      // Show success message (in a real app, you might use a toast notification)
-      alert("Store created successfully!");
+      if (response.status === 200 || response.status === 201) {
+        // Handle success
+        setShowNewStoreModal(false);
+        // Reset form
+        setNewStore({
+          name: "",
+          owner: "",
+          email: "",
+          password: "",
+          phoneOne: "",
+          phoneTwo: "",
+          addressOne: "",
+          addressTwo: "",
+          role: "",
+          rating: 0,
+          profileImg: null,
+        });
+        setErrors({});
+
+        // Refresh store list
+        fetchApi();
+        alert("Store created successfully!");
+      }
+    } catch (error) {
+      console.error("Error creating store:", error);
+      alert("Failed to create store. Please try again.");
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
         return "bg-emerald-100 text-emerald-800 border-emerald-200";
@@ -208,7 +348,20 @@ const StoresManagement = () => {
     }
   };
 
-  const renderStars = (rating) => {
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "Active":
+        return <FaCheck className="w-3 h-3 text-emerald-600" />;
+      case "Pending":
+        return <FaClock className="w-3 h-3 text-amber-600" />;
+      case "Suspended":
+        return <FaBan className="w-3 h-3 text-red-600" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
       <FaStar
         key={i}
@@ -219,7 +372,63 @@ const StoresManagement = () => {
     ));
   };
 
-  return (
+  const fetchApi = async () => {
+    try {
+      const result = await checkAuth();
+      const tokenStatus: boolean = result.status;
+      const myUserData: UserType | undefined = result.data;
+      if (myUserData != undefined && myUserData.role !== "admin") {
+        navigate("/login");
+      }
+      if (!tokenStatus) {
+        navigate("/login");
+        return;
+      }
+      const response = await axios.get(
+        `${backendDomainName}/api/admin/stores`,
+        {
+          withCredentials: true,
+        }
+      );
+      console.log(response.data);
+      dispatch(setReduxStorePageStoreCount(response.data.counts));
+      setPages(response.data.pagination.pages);
+      dispatch(setStore(response.data.data));
+      setStores(response.data.data);
+      setActiveStoresCount(response.data.counts.active);
+      setPendingStoresCount(response.data.counts.pending);
+      setSuspendedStoresCount(response.data.counts.suspended);
+      setTotalStoresCount(response.data.counts.total);
+    } catch (error) {
+      console.error("Error in fetchApi:", error);
+      setIsServerError(true);
+    }
+  };
+
+  // Close dropdown when clicking outside - improved version
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+
+      // Check if click is outside any dropdown container
+      if (!target.closest("[data-dropdown-container]")) {
+        setOpenDropdownId(null);
+      }
+    };
+
+    if (openDropdownId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [openDropdownId]);
+
+  useEffect(() => {
+    fetchApi();
+  }, []);
+
+  return isServerError ? (
+    <InternalServerError />
+  ) : (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
@@ -258,7 +467,7 @@ const StoresManagement = () => {
                   Active Stores
                 </p>
                 <p className="text-2xl font-bold text-emerald-600">
-                  {stores.filter((s) => s.status === "Active").length}
+                  {activeStoresCount}
                 </p>
               </div>
             </div>
@@ -271,7 +480,7 @@ const StoresManagement = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Pending</p>
                 <p className="text-2xl font-bold text-amber-600">
-                  {stores.filter((s) => s.status === "Pending").length}
+                  {pendingStoresCount}
                 </p>
               </div>
             </div>
@@ -284,7 +493,7 @@ const StoresManagement = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Suspended</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {stores.filter((s) => s.status === "Suspended").length}
+                  {suspendedStoresCount}
                 </p>
               </div>
             </div>
@@ -299,7 +508,7 @@ const StoresManagement = () => {
                   Total Stores
                 </p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {stores.length}
+                  {totalStoresCount}
                 </p>
               </div>
             </div>
@@ -371,16 +580,24 @@ const StoresManagement = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredStores.map((store, index) => (
+                {filteredStores.map((store) => (
                   <tr
                     key={store.id}
                     className="hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                          {store.name.charAt(0)}
-                        </div>
+                        {store.profile ? (
+                          <img
+                            src={`http://localhost:1500/${store.profile}`}
+                            alt={store.name}
+                            className="h-12 w-12 flex-shrink-0 rounded-xl object-cover shadow-lg"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                            {store.name.charAt(0)}
+                          </div>
+                        )}
                         <div className="ml-4">
                           <div className="text-sm font-semibold text-gray-900">
                             {store.name}
@@ -394,17 +611,81 @@ const StoresManagement = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center text-sm text-gray-600">
                         <FaMapMarkerAlt className="mr-2 text-indigo-500" />
-                        {store.city}
+                        {store.location}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                          store.status
-                        )}`}
-                      >
-                        {store.status}
-                      </span>
+                      <div className="relative" data-dropdown-container>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDropdownToggle(e, store.id)}
+                          disabled={loadingStoreId === store.id}
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                            store.status
+                          )} hover:shadow-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {loadingStoreId === store.id ? (
+                            <FaSpinner className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <span className="mr-1">
+                              {getStatusIcon(store.status)}
+                            </span>
+                          )}
+                          {store.status}
+                          <FaChevronDown
+                            className={`w-3 h-3 ml-1 transition-transform duration-200 ${
+                              openDropdownId === store.id ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+
+                        {/* Status Dropdown - Only show for the specific store */}
+                        {openDropdownId === store.id && (
+                          <div className="absolute top-full left-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                            <div className="py-1">
+                              {store.status !== "Active" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(store.id, "Active");
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-emerald-50 flex items-center transition-colors duration-200"
+                                >
+                                  <FaCheck className="w-3 h-3 mr-2 text-emerald-600" />
+                                  Active
+                                </button>
+                              )}
+                              {store.status !== "Pending" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(store.id, "Pending");
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-amber-50 flex items-center transition-colors duration-200"
+                                >
+                                  <FaClock className="w-3 h-3 mr-2 text-amber-600" />
+                                  Pending
+                                </button>
+                              )}
+                              {store.status !== "Suspended" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(store.id, "Suspended");
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center transition-colors duration-200"
+                                >
+                                  <FaBan className="w-3 h-3 mr-2 text-red-600" />
+                                  Suspended
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center text-sm text-gray-600">
@@ -428,24 +709,6 @@ const StoresManagement = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end space-x-2">
-                        {store.status === "Pending" && (
-                          <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center">
-                            <FaCheck className="mr-1" />
-                            Approve
-                          </button>
-                        )}
-                        {store.status === "Active" && (
-                          <button className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center">
-                            <FaBan className="mr-1" />
-                            Suspend
-                          </button>
-                        )}
-                        {store.status === "Suspended" && (
-                          <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center">
-                            <FaCheck className="mr-1" />
-                            Activate
-                          </button>
-                        )}
                         <button
                           onClick={() => navigate(`/admin/stores/${store.id}`)}
                           className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center"
@@ -476,8 +739,9 @@ const StoresManagement = () => {
                 <div>
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">1</span> to{" "}
-                    <span className="font-medium">10</span> of{" "}
-                    <span className="font-medium">20</span> results
+                    <span className="font-medium">{filteredStores.length}</span>{" "}
+                    of <span className="font-medium">{stores.length}</span>{" "}
+                    results
                   </p>
                 </div>
                 <div>
@@ -485,12 +749,16 @@ const StoresManagement = () => {
                     <button className="relative inline-flex items-center px-4 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                       Previous
                     </button>
-                    <button className="relative inline-flex items-center px-4 py-2 border border-indigo-500 bg-indigo-50 text-sm font-medium text-indigo-600">
-                      1
-                    </button>
-                    <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      2
-                    </button>
+
+                    {pages.map((each) => (
+                      <button
+                        key={each}
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        {each}
+                      </button>
+                    ))}
+
                     <button className="relative inline-flex items-center px-4 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                       Next
                     </button>
@@ -537,6 +805,7 @@ const StoresManagement = () => {
                 <div className="p-8">
                   <form onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      {/* Store Name */}
                       <div className="space-y-2">
                         <label
                           htmlFor="name"
@@ -555,7 +824,7 @@ const StoresManagement = () => {
                             errors.name
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="Enter store name"
                         />
                         {errors.name && (
@@ -566,35 +835,7 @@ const StoresManagement = () => {
                         )}
                       </div>
 
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="city"
-                          className="flex items-center text-sm font-semibold text-gray-700"
-                        >
-                          <FaMapMarkerAlt className="mr-2 text-indigo-500" />
-                          City*
-                        </label>
-                        <input
-                          type="text"
-                          name="city"
-                          id="city"
-                          value={newStore.city}
-                          onChange={handleInputChange}
-                          className={`block w-full rounded-xl border-2 ${
-                            errors.city
-                              ? "border-red-300 ring-2 ring-red-100"
-                              : "border-gray-200 focus:border-indigo-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
-                          placeholder="Enter city"
-                        />
-                        {errors.city && (
-                          <p className="mt-1 text-sm text-red-600 flex items-center">
-                            <span className="mr-1">⚠️</span>
-                            {errors.city}
-                          </p>
-                        )}
-                      </div>
-
+                      {/* Owner Name */}
                       <div className="space-y-2">
                         <label
                           htmlFor="owner"
@@ -613,7 +854,7 @@ const StoresManagement = () => {
                             errors.owner
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="Enter owner name"
                         />
                         {errors.owner && (
@@ -624,6 +865,7 @@ const StoresManagement = () => {
                         )}
                       </div>
 
+                      {/* Email */}
                       <div className="space-y-2">
                         <label
                           htmlFor="email"
@@ -642,7 +884,7 @@ const StoresManagement = () => {
                             errors.email
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="example@email.com"
                         />
                         {errors.email && (
@@ -653,71 +895,243 @@ const StoresManagement = () => {
                         )}
                       </div>
 
+                      {/* Password */}
                       <div className="space-y-2">
                         <label
-                          htmlFor="phone"
+                          htmlFor="password"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaPhone className="mr-2 text-indigo-500" />
-                          Phone Number*
+                          <FaLock className="mr-2 text-indigo-500" />
+                          Password*
                         </label>
                         <input
-                          type="text"
-                          name="phone"
-                          id="phone"
-                          value={newStore.phone}
+                          type="password"
+                          name="password"
+                          id="password"
+                          value={newStore.password}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.phone
+                            errors.password
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
-                          placeholder="(123) 456-7890"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
+                          placeholder="Enter password"
                         />
-                        {errors.phone && (
+                        {errors.password && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.phone}
+                            {errors.password}
                           </p>
                         )}
                       </div>
 
-                      <div className="space-y-2 sm:col-span-2">
+                      {/* Phone One */}
+                      <div className="space-y-2">
                         <label
-                          htmlFor="address"
+                          htmlFor="phoneOne"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaMapMarkerAlt className="mr-2 text-indigo-500" />
-                          Address
+                          <FaPhone className="mr-2 text-indigo-500" />
+                          Primary Phone*
                         </label>
                         <input
                           type="text"
-                          name="address"
-                          id="address"
-                          value={newStore.address}
+                          name="phoneOne"
+                          id="phoneOne"
+                          value={newStore.phoneOne}
                           onChange={handleInputChange}
-                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white"
-                          placeholder="Enter full address"
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.phoneOne
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-indigo-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
+                          placeholder="(123) 456-7890"
+                        />
+                        {errors.phoneOne && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.phoneOne}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Phone Two */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="phoneTwo"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaPhoneAlt className="mr-2 text-indigo-500" />
+                          Secondary Phone
+                        </label>
+                        <input
+                          type="text"
+                          name="phoneTwo"
+                          id="phoneTwo"
+                          value={newStore.phoneTwo}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none"
+                          placeholder="(123) 456-7890"
                         />
                       </div>
 
-                      <div className="space-y-2 sm:col-span-2">
+                      {/* Address One */}
+                      <div className="space-y-2">
                         <label
-                          htmlFor="description"
+                          htmlFor="addressOne"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaStore className="mr-2 text-indigo-500" />
-                          Description
+                          <FaMapMarkerAlt className="mr-2 text-indigo-500" />
+                          Primary Address*
                         </label>
-                        <textarea
-                          name="description"
-                          id="description"
-                          rows={3}
-                          value={newStore.description}
+                        <input
+                          type="text"
+                          name="addressOne"
+                          id="addressOne"
+                          value={newStore.addressOne}
                           onChange={handleInputChange}
-                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white"
-                          placeholder="Enter store description"
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.addressOne
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-indigo-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
+                          placeholder="Enter primary address"
                         />
+                        {errors.addressOne && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.addressOne}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Address Two */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="addressTwo"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaMapMarkerAlt className="mr-2 text-indigo-500" />
+                          Secondary Address
+                        </label>
+                        <input
+                          type="text"
+                          name="addressTwo"
+                          id="addressTwo"
+                          value={newStore.addressTwo}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none"
+                          placeholder="Enter secondary address"
+                        />
+                      </div>
+
+                      {/* Role */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="role"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaUserTag className="mr-2 text-indigo-500" />
+                          Role*
+                        </label>
+                        <select
+                          name="role"
+                          id="role"
+                          value={newStore.role}
+                          onChange={handleInputChange}
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.role
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-indigo-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
+                        >
+                          <option value="">Select role</option>
+                          <option value="admin">Admin</option>
+                          <option value="manager">Manager</option>
+                          <option value="staff">Staff</option>
+                        </select>
+                        {errors.role && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.role}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Rating */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="rating"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaStar className="mr-2 text-indigo-500" />
+                          Rating
+                        </label>
+                        <select
+                          name="rating"
+                          id="rating"
+                          value={newStore.rating}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none"
+                        >
+                          <option value="0">Select rating</option>
+                          <option value="1">1 Star</option>
+                          <option value="2">2 Stars</option>
+                          <option value="3">3 Stars</option>
+                          <option value="4">4 Stars</option>
+                          <option value="5">5 Stars</option>
+                        </select>
+                      </div>
+
+                      {/* Profile Image Upload */}
+                      <div className="space-y-2 sm:col-span-2">
+                        <label
+                          htmlFor="profileImg"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaImage className="mr-2 text-indigo-500" />
+                          Profile Image
+                        </label>
+                        <div className="flex items-center">
+                          <label
+                            htmlFor="profileImg"
+                            className="cursor-pointer flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-indigo-500 transition-all duration-200 w-full"
+                          >
+                            <input
+                              type="file"
+                              name="profileImg"
+                              id="profileImg"
+                              onChange={handleFileChange}
+                              className="hidden"
+                              accept="image/*"
+                            />
+                            {newStore.profileImg ? (
+                              <div className="flex items-center">
+                                <img
+                                  src={
+                                    URL.createObjectURL(newStore.profileImg) ||
+                                    "/placeholder.svg" ||
+                                    "/placeholder.svg"
+                                  }
+                                  alt="Preview"
+                                  className="h-12 w-12 rounded-full object-cover mr-3"
+                                />
+                                <span>Change image</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                <FaUpload className="mr-2 text-gray-400" />
+                                <span>Click to upload profile image</span>
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                        {errors.profileImg && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.profileImg}
+                          </p>
+                        )}
                       </div>
                     </div>
 

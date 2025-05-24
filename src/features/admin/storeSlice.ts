@@ -36,7 +36,13 @@ const storeSlice = createSlice({
   initialState,
   reducers: {
     setStore: (state, action) => {
-      console.log(action.payload, state);
+      state.stores = action.payload;
+    },
+    setReduxStorePageStoreCount: (state, action) => {
+      state.totalStoresCount = action.payload.total;
+      state.activeStoresCount = action.payload.active;
+      state.pendingStoresCount = action.payload.pending;
+      state.suspendStoresCount = action.payload.suspended;
     },
     storeLogout: (state) => {
       console.log(state);
@@ -52,10 +58,10 @@ const storeSlice = createSlice({
 
 export const {
   setStore,
+  setReduxStorePageStoreCount,
   storeLogout,
   setReduxPopularStores,
   setReduxStoreCount,
 } = storeSlice.actions;
 
-// ✅ Export ONLY the reducer
 export default storeSlice.reducer;
