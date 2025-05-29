@@ -38,6 +38,8 @@ import Preview from "./pages/Preview";
 import LoginPage from "./pages/login";
 import DeliveryView from "./pages/admin/deliveryView";
 import AssignArea from "./pages/admin/DeliveryAssignArea";
+import UserDetails from "./pages/admin/userDetails";
+import EmailCompose from "./pages/admin/email-compose";
 
 function App() {
   // In a real app, this would come from authentication
@@ -69,10 +71,12 @@ function App() {
                   element={<DeliveryStaffManagement />}
                 />
                 <Route path="/delivery/view/:id" element={<DeliveryView />} />
-                <Route path="delivery/area/:id" element={<AssignArea />} />
+                <Route path="/delivery/area/:id" element={<AssignArea />} />
                 <Route path="/orders" element={<OrdersManagement />} />
                 <Route path="/orders/:id" element={<OrderDetail />} />
                 <Route path="/users" element={<UserManagement />} />
+                <Route path="/users/:id" element={<UserDetails />} />
+                <Route path="/users/email/:id" element={<EmailCompose />} />
                 <Route path="/earnings" element={<EarningsCommissions />} />
                 <Route path="/promotions" element={<PromotionsBanners />} />
                 <Route path="/reports" element={<ReportsAnalytics />} />

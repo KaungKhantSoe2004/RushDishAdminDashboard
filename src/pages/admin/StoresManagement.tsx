@@ -45,7 +45,7 @@ interface Store {
   owner: string;
   email: string;
   location: string;
-  status: "Active" | "Pending" | "Suspended";
+  status: "active" | "pending" | "suspended";
   rating: number;
 }
 
@@ -70,10 +70,10 @@ interface FormErrors {
 const StoresManagement = () => {
   const backendDomainName: string = "http://localhost:1500";
   const navigate = useNavigate();
+  const [isSearch, setIsSearch] = useState(false);
   const dispatch = useDispatch();
   const ReduxStores = useSelector((store: RootState) => store.store);
   const [isServerError, setIsServerError] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewStoreModal, setShowNewStoreModal] = useState(false);
   const [pages, setPages] = useState([1]);
@@ -106,25 +106,124 @@ const StoresManagement = () => {
   );
   const [stores, setStores] = useState<Store[]>(ReduxStores.stores);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [actualSearchTerm, setActualSearchTerm] = useState("");
+
+  // Validation state
+  const [validationErrors, setValidationErrors] = useState<FormErrors>({});
+  const [isFormValid, setIsFormValid] = useState(false);
+
+  // Validation functions
+  const validatePassword = (password: string): boolean => {
+    // At least 8 characters, must contain both numbers and letters
+    const hasNumber = /\d/.test(password);
+    const hasLetter = /[a-zA-Z]/.test(password);
+    return password.length >= 8 && hasNumber && hasLetter;
+  };
+
+  const validatePhone = (phone: string): boolean => {
+    // Must start with +95 and have valid format
+    const phoneRegex = /^\+95\d{7,10}$/;
+    return phoneRegex.test(phone.replace(/[\s\-()]/g, ""));
+  };
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateRequired = (value: string): boolean => {
+    return value.trim().length > 0;
+  };
+
+  const validateForm = (formData: NewStore): FormErrors => {
+    const newErrors: FormErrors = {};
+
+    // Required field validations
+    if (!validateRequired(formData.name)) {
+      newErrors.name = "Store name is required";
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = "Store name must be at least 2 characters";
+    } else if (formData.name.trim().length > 100) {
+      newErrors.name = "Store name must be less than 100 characters";
+    }
+
+    if (!validateRequired(formData.owner)) {
+      newErrors.owner = "Owner name is required";
+    } else if (formData.owner.trim().length < 2) {
+      newErrors.owner = "Owner name must be at least 2 characters";
+    } else if (formData.owner.trim().length > 50) {
+      newErrors.owner = "Owner name must be less than 50 characters";
+    }
+
+    if (!validateRequired(formData.email)) {
+      newErrors.email = "Email is required";
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!validateRequired(formData.password)) {
+      newErrors.password = "Password is required";
+    } else if (!validatePassword(formData.password)) {
+      newErrors.password =
+        "Password must be at least 8 characters with both numbers and letters";
+    }
+
+    if (!validateRequired(formData.phoneOne)) {
+      newErrors.phoneOne = "Primary phone is required";
+    } else if (!validatePhone(formData.phoneOne)) {
+      newErrors.phoneOne =
+        "Phone number must start with +95 and be valid (e.g., +95912345678)";
+    }
+
+    if (
+      formData.phoneTwo &&
+      formData.phoneTwo.trim() !== "" &&
+      !validatePhone(formData.phoneTwo)
+    ) {
+      newErrors.phoneTwo =
+        "Phone number must start with +95 and be valid (e.g., +95912345678)";
+    }
+
+    if (!validateRequired(formData.addressOne)) {
+      newErrors.addressOne = "Primary address is required";
+    } else if (formData.addressOne.trim().length < 10) {
+      newErrors.addressOne = "Address must be at least 10 characters";
+    } else if (formData.addressOne.trim().length > 200) {
+      newErrors.addressOne = "Address must be less than 200 characters";
+    }
+
+    if (
+      formData.addressTwo &&
+      formData.addressTwo.trim() !== "" &&
+      formData.addressTwo.trim().length > 200
+    ) {
+      newErrors.addressTwo = "Address must be less than 200 characters";
+    }
+
+    if (!formData.role) {
+      newErrors.role = "Role is required";
+    }
+
+    if (!formData.profileImg) {
+      newErrors.profileImg = "Profile image is required";
+    }
+
+    return newErrors;
+  };
 
   // Filter stores based on search term and status filter
   const filteredStores = stores.filter((store) => {
-    const matchesSearch =
-      store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      store.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      store.owner.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesStatus =
       statusFilter === "all" ||
       store.status.toLowerCase() === statusFilter.toLowerCase();
 
-    return matchesSearch && matchesStatus;
+    return matchesStatus;
   });
 
   // Handle store status change with proper state isolation
   const handleStatusChange = async (
     storeId: string,
-    newStatus: "Active" | "Pending" | "Suspended"
+    newStatus: "active" | "pending" | "suspended"
   ) => {
     // Prevent multiple simultaneous updates
     if (loadingStoreId) return;
@@ -134,8 +233,8 @@ const StoresManagement = () => {
 
     try {
       const response = await axios.put(
-        `${backendDomainName}/api/admin/stores/${storeId}/status`,
-        { status: newStatus },
+        `${backendDomainName}/api/admin/storeStatus`,
+        { status: newStatus, storeId },
         { withCredentials: true }
       );
 
@@ -169,9 +268,9 @@ const StoresManagement = () => {
 
         // Show success message
         const actionText =
-          newStatus === "Active"
+          newStatus === "active"
             ? "activated"
-            : newStatus === "Suspended"
+            : newStatus === "suspended"
             ? "suspended"
             : "set to pending";
         alert(`Store ${actionText} successfully!`);
@@ -201,27 +300,26 @@ const StoresManagement = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setNewStore((prev) => ({
-      ...prev,
+    const updatedStore = {
+      ...newStore,
       [name]: value,
-    }));
+    };
+    setNewStore(updatedStore);
 
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
+    // Real-time validation
+    const errors = validateForm(updatedStore);
+    setValidationErrors(errors);
+    setIsFormValid(Object.keys(errors).length === 0);
   };
 
   // Handle file upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log(file);
     if (file) {
       // Validate file type and size
       if (!file.type.match("image.*")) {
-        setErrors((prev) => ({
+        setValidationErrors((prev) => ({
           ...prev,
           profileImg: "Please select an image file",
         }));
@@ -230,67 +328,51 @@ const StoresManagement = () => {
 
       if (file.size > 5 * 1024 * 1024) {
         // 5MB limit
-        setErrors((prev) => ({
+        setValidationErrors((prev) => ({
           ...prev,
           profileImg: "File size should be less than 5MB",
         }));
         return;
       }
 
-      setNewStore((prev) => ({
-        ...prev,
+      const updatedStore = {
+        ...newStore,
         profileImg: file,
-      }));
+      };
+      setNewStore(updatedStore);
 
-      // Clear any previous errors
-      if (errors.profileImg) {
-        setErrors((prev) => ({
-          ...prev,
-          profileImg: "",
-        }));
-      }
+      // Real-time validation
+      const errors = validateForm(updatedStore);
+      setValidationErrors(errors);
+      setIsFormValid(Object.keys(errors).length === 0);
     }
   };
 
-  const validateForm = () => {
-    const newErrors: FormErrors = {};
-
-    if (!newStore.name.trim()) newErrors.name = "Store name is required";
-    if (!newStore.owner.trim()) newErrors.owner = "Owner name is required";
-    if (!newStore.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(newStore.email)) {
-      newErrors.email = "Email is invalid";
-    }
-    if (!newStore.password) newErrors.password = "Password is required";
-    if (!newStore.phoneOne.trim())
-      newErrors.phoneOne = "Primary phone is required";
-    if (!newStore.addressOne.trim())
-      newErrors.addressOne = "Primary address is required";
-    if (!newStore.role) newErrors.role = "Role is required";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("heell");
 
-    if (!validateForm()) {
+    // Validate form before submission
+    const errors = validateForm(newStore);
+
+    setValidationErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setIsFormValid(false);
+      alert("Please fix all validation errors before submitting");
       return;
     }
 
     try {
       const formData = new FormData();
-      formData.append("name", newStore.name);
-      formData.append("owner", newStore.owner);
-      formData.append("email", newStore.email);
+      formData.append("name", newStore.name.trim());
+      formData.append("owner", newStore.owner.trim());
+      formData.append("email", newStore.email.trim());
       formData.append("password", newStore.password);
-      formData.append("phoneOne", newStore.phoneOne);
-      formData.append("phoneTwo", newStore.phoneTwo || "");
-      formData.append("addressOne", newStore.addressOne);
-      formData.append("addressTwo", newStore.addressTwo || "");
+      formData.append("phoneOne", newStore.phoneOne.trim());
+      formData.append("phoneTwo", newStore.phoneTwo.trim() || "");
+      formData.append("addressOne", newStore.addressOne.trim());
+      formData.append("addressTwo", newStore.addressTwo.trim() || "");
       formData.append("role", newStore.role);
       formData.append("rating", newStore.rating.toString());
       if (newStore.profileImg) {
@@ -323,7 +405,8 @@ const StoresManagement = () => {
           rating: 0,
           profileImg: null,
         });
-        setErrors({});
+        setValidationErrors({});
+        setIsFormValid(false);
 
         // Refresh store list
         fetchApi();
@@ -372,7 +455,7 @@ const StoresManagement = () => {
     ));
   };
 
-  const fetchApi = async () => {
+  const fetchApi = async (mySearchTerm?: string) => {
     try {
       const result = await checkAuth();
       const tokenStatus: boolean = result.status;
@@ -384,12 +467,15 @@ const StoresManagement = () => {
         navigate("/login");
         return;
       }
-      const response = await axios.get(
-        `${backendDomainName}/api/admin/stores`,
-        {
-          withCredentials: true,
-        }
-      );
+      let uri: string;
+      if (mySearchTerm === undefined || mySearchTerm === "") {
+        uri = `${backendDomainName}/api/admin/stores`;
+      } else {
+        uri = `${backendDomainName}/api/admin/stores?search=${mySearchTerm}`;
+      }
+      const response = await axios.get(uri, {
+        withCredentials: true,
+      });
       console.log(response.data);
       dispatch(setReduxStorePageStoreCount(response.data.counts));
       setPages(response.data.pagination.pages);
@@ -425,6 +511,13 @@ const StoresManagement = () => {
   useEffect(() => {
     fetchApi();
   }, []);
+
+  useEffect(() => {
+    if (!showNewStoreModal) {
+      setValidationErrors({});
+      setIsFormValid(false);
+    }
+  }, [showNewStoreModal]);
 
   return isServerError ? (
     <InternalServerError />
@@ -518,17 +611,32 @@ const StoresManagement = () => {
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="relative w-full md:w-96">
+            <div className="relative w-full md:w-96 flex">
               <input
                 type="text"
-                placeholder="Search stores, cities, or owners..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
+                placeholder="Search stores by stores name"
+                value={actualSearchTerm}
+                onChange={(e) => {
+                  setActualSearchTerm(e.target.value);
+                  if (e.target.value == "") {
+                    setIsSearch(true);
+                    fetchApi();
+                  }
+                }}
+                className="w-full pl-12 pr-4 py-3 rounded-l-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
               />
               <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <button
+                onClick={() => {
+                  setIsSearch(true);
+                  fetchApi(actualSearchTerm);
+                }}
+                className="px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-xl py-3 flex items-center space-x-2 border border-indigo-600 transition-colors duration-200"
+              >
+                <FaSearch className="w-4 h-4" />
+                <span>Search</span>
+              </button>
             </div>
-
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-indigo-100 rounded-lg">
@@ -643,12 +751,12 @@ const StoresManagement = () => {
                         {openDropdownId === store.id && (
                           <div className="absolute top-full left-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                             <div className="py-1">
-                              {store.status !== "Active" && (
+                              {store.status !== "active" && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "Active");
+                                    handleStatusChange(store.id, "active");
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-emerald-50 flex items-center transition-colors duration-200"
                                 >
@@ -656,12 +764,12 @@ const StoresManagement = () => {
                                   Active
                                 </button>
                               )}
-                              {store.status !== "Pending" && (
+                              {store.status !== "pending" && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "Pending");
+                                    handleStatusChange(store.id, "pending");
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-amber-50 flex items-center transition-colors duration-200"
                                 >
@@ -669,12 +777,12 @@ const StoresManagement = () => {
                                   Pending
                                 </button>
                               )}
-                              {store.status !== "Suspended" && (
+                              {store.status !== "suspended" && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "Suspended");
+                                    handleStatusChange(store.id, "suspended");
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center transition-colors duration-200"
                                 >
@@ -821,16 +929,17 @@ const StoresManagement = () => {
                           value={newStore.name}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.name
+                            validationErrors.name
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="Enter store name"
+                          maxLength={100}
                         />
-                        {errors.name && (
+                        {validationErrors.name && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.name}
+                            {validationErrors.name}
                           </p>
                         )}
                       </div>
@@ -851,16 +960,16 @@ const StoresManagement = () => {
                           value={newStore.owner}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.owner
+                            validationErrors.owner
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="Enter owner name"
                         />
-                        {errors.owner && (
+                        {validationErrors.owner && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.owner}
+                            {validationErrors.owner}
                           </p>
                         )}
                       </div>
@@ -881,16 +990,16 @@ const StoresManagement = () => {
                           value={newStore.email}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.email
+                            validationErrors.email
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="example@email.com"
                         />
-                        {errors.email && (
+                        {validationErrors.email && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.email}
+                            {validationErrors.email}
                           </p>
                         )}
                       </div>
@@ -911,16 +1020,16 @@ const StoresManagement = () => {
                           value={newStore.password}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.password
+                            validationErrors.password
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
-                          placeholder="Enter password"
+                          placeholder="At least 8 characters with numbers and letters"
                         />
-                        {errors.password && (
+                        {validationErrors.password && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.password}
+                            {validationErrors.password}
                           </p>
                         )}
                       </div>
@@ -941,16 +1050,16 @@ const StoresManagement = () => {
                           value={newStore.phoneOne}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.phoneOne
+                            validationErrors.phoneOne
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
-                          placeholder="(123) 456-7890"
+                          placeholder="+95912345678"
                         />
-                        {errors.phoneOne && (
+                        {validationErrors.phoneOne && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.phoneOne}
+                            {validationErrors.phoneOne}
                           </p>
                         )}
                       </div>
@@ -971,7 +1080,7 @@ const StoresManagement = () => {
                           value={newStore.phoneTwo}
                           onChange={handleInputChange}
                           className="block w-full rounded-xl border-2 border-gray-200 focus:border-indigo-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none"
-                          placeholder="(123) 456-7890"
+                          placeholder="+95912345678"
                         />
                       </div>
 
@@ -991,16 +1100,16 @@ const StoresManagement = () => {
                           value={newStore.addressOne}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.addressOne
+                            validationErrors.addressOne
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
                           placeholder="Enter primary address"
                         />
-                        {errors.addressOne && (
+                        {validationErrors.addressOne && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.addressOne}
+                            {validationErrors.addressOne}
                           </p>
                         )}
                       </div>
@@ -1040,7 +1149,7 @@ const StoresManagement = () => {
                           value={newStore.role}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.role
+                            validationErrors.role
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-indigo-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-indigo-100 transition-all duration-200 bg-gray-50 hover:bg-white focus:outline-none`}
@@ -1050,10 +1159,10 @@ const StoresManagement = () => {
                           <option value="manager">Manager</option>
                           <option value="staff">Staff</option>
                         </select>
-                        {errors.role && (
+                        {validationErrors.role && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.role}
+                            {validationErrors.role}
                           </p>
                         )}
                       </div>
@@ -1090,12 +1199,16 @@ const StoresManagement = () => {
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
                           <FaImage className="mr-2 text-indigo-500" />
-                          Profile Image
+                          Profile Image*
                         </label>
                         <div className="flex items-center">
                           <label
                             htmlFor="profileImg"
-                            className="cursor-pointer flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl hover:border-indigo-500 transition-all duration-200 w-full"
+                            className={`cursor-pointer flex items-center justify-center px-4 py-3 border-2 border-dashed ${
+                              validationErrors.profileImg
+                                ? "border-red-300 bg-red-50"
+                                : "border-gray-300 hover:border-indigo-500"
+                            } rounded-xl transition-all duration-200 w-full`}
                           >
                             <input
                               type="file"
@@ -1104,6 +1217,7 @@ const StoresManagement = () => {
                               onChange={handleFileChange}
                               className="hidden"
                               accept="image/*"
+                              required
                             />
                             {newStore.profileImg ? (
                               <div className="flex items-center">
@@ -1121,15 +1235,17 @@ const StoresManagement = () => {
                             ) : (
                               <div className="flex items-center">
                                 <FaUpload className="mr-2 text-gray-400" />
-                                <span>Click to upload profile image</span>
+                                <span>
+                                  Click to upload profile image (Required)
+                                </span>
                               </div>
                             )}
                           </label>
                         </div>
-                        {errors.profileImg && (
+                        {validationErrors.profileImg && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.profileImg}
+                            {validationErrors.profileImg}
                           </p>
                         )}
                       </div>
@@ -1146,7 +1262,12 @@ const StoresManagement = () => {
                         </button>
                         <button
                           type="submit"
-                          className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center"
+                          // disabled={isFormValid}
+                          className={`px-8 py-3 rounded-xl transition-all duration-200 font-medium shadow-lg transform flex items-center ${
+                            isFormValid
+                              ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 hover:shadow-xl hover:-translate-y-0.5"
+                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          }`}
                         >
                           <FaPlus className="mr-2" />
                           Create Store

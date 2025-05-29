@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaSearch,
@@ -17,100 +17,55 @@ import {
   FaDollarSign,
   FaCheckCircle,
   FaClock,
+  FaUpload,
+  FaLock,
 } from "react-icons/fa";
+import checkAuth, { type UserType } from "../../helpers/checkAuth";
+import axios from "axios";
+import { useSelector } from "react-redux";
+import type { RootState } from "@reduxjs/toolkit/query";
+import { useDispatch } from "react-redux";
+import {
+  setDeliveries,
+  setDeliveryPageCounts,
+} from "../../features/admin/deliverySlice";
 
 const DeliveryStaffManagement = () => {
+  const backendDomainName: string = "http://localhost:1500";
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewStaffModal, setShowNewStaffModal] = useState(false);
+  const ReduxDelivery = useSelector((store: RootState) => store.delivery);
+  const [onlineCount, setOnlineCount] = useState(ReduxDelivery.online_deli);
+  const [offlineCount, setOfflineCount] = useState(ReduxDelivery.offline_deli);
+  const [totalDeliveries, setTotalDeliveries] = useState(
+    ReduxDelivery.total_deli
+  );
+  const [totalEarnings, setTotalEarnings] = useState(
+    ReduxDelivery.totalEarnings
+  );
+  const dispatch = useDispatch();
+  const [profilePreview, setProfilePreview] = useState(null);
   const [newStaff, setNewStaff] = useState({
     name: "",
+    phone_one: "",
+    phone_two: "",
+    address_one: "",
+    address_two: "",
     email: "",
-    phone: "",
-    zone: "",
-    vehicleType: "",
-    licenseNumber: "",
-    emergencyContact: "",
-    address: "",
+    profile: null,
+    vehicle_type: "",
+    vehicle_number: "",
+    rating: "",
+    password: "",
   });
   const [errors, setErrors] = useState({});
 
   // Mock data
-  const deliveryStaff = [
-    {
-      id: 1,
-      name: "John Smith",
-      zone: "Manhattan",
-      status: "Online",
-      earningsToday: "$78.50",
-      completedToday: 6,
-      rating: 4.8,
-    },
-    {
-      id: 2,
-      name: "Sarah Johnson",
-      zone: "Brooklyn",
-      status: "Online",
-      earningsToday: "$65.25",
-      completedToday: 5,
-      rating: 4.5,
-    },
-    {
-      id: 3,
-      name: "Michael Brown",
-      zone: "Queens",
-      status: "Offline",
-      earningsToday: "$0.00",
-      completedToday: 0,
-      rating: 4.7,
-    },
-    {
-      id: 4,
-      name: "Emily Davis",
-      zone: "Bronx",
-      status: "Online",
-      earningsToday: "$42.75",
-      completedToday: 3,
-      rating: 4.9,
-    },
-    {
-      id: 5,
-      name: "David Wilson",
-      zone: "Staten Island",
-      status: "Offline",
-      earningsToday: "$0.00",
-      completedToday: 0,
-      rating: 4.6,
-    },
-    {
-      id: 6,
-      name: "Lisa Anderson",
-      zone: "Manhattan",
-      status: "Online",
-      earningsToday: "$91.00",
-      completedToday: 7,
-      rating: 4.4,
-    },
-    {
-      id: 7,
-      name: "Robert Martinez",
-      zone: "Brooklyn",
-      status: "Online",
-      earningsToday: "$52.50",
-      completedToday: 4,
-      rating: 4.3,
-    },
-    {
-      id: 8,
-      name: "Jennifer Taylor",
-      zone: "Queens",
-      status: "Offline",
-      earningsToday: "$0.00",
-      completedToday: 0,
-      rating: 4.7,
-    },
-  ];
+  const [deliveryStaff, setDeliveryStaff] = useState<[]>(
+    ReduxDelivery.deliveries
+  );
 
   // Filter delivery staff based on search term and status filter
   const filteredStaff = deliveryStaff.filter((staff) => {
@@ -126,22 +81,6 @@ const DeliveryStaffManagement = () => {
   });
 
   // Count online and offline staff
-  const onlineCount = deliveryStaff.filter(
-    (staff) => staff.status === "Online"
-  ).length;
-  const offlineCount = deliveryStaff.filter(
-    (staff) => staff.status === "Offline"
-  ).length;
-  const totalEarnings = deliveryStaff
-    .reduce(
-      (sum, staff) => sum + parseFloat(staff.earningsToday.replace("$", "")),
-      0
-    )
-    .toFixed(2);
-  const totalDeliveries = deliveryStaff.reduce(
-    (sum, staff) => sum + staff.completedToday,
-    0
-  );
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -159,48 +98,196 @@ const DeliveryStaffManagement = () => {
     }
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      if (!validTypes.includes(file.type)) {
+        setErrors({
+          ...errors,
+          profile: "Please select a valid image file (JPEG, PNG, GIF)",
+        });
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors({
+          ...errors,
+          profile: "File size must be less than 5MB",
+        });
+        return;
+      }
+
+      setNewStaff({
+        ...newStaff,
+        profile: file,
+      });
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setProfilePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+
+      // Clear error
+      if (errors.profile) {
+        setErrors({
+          ...errors,
+          profile: null,
+        });
+      }
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
-    if (!newStaff.name.trim()) newErrors.name = "Name is required";
+    // Name validation
+    if (!newStaff.name.trim()) {
+      newErrors.name = "Name is required";
+    } else if (newStaff.name.trim().length < 2) {
+      newErrors.name = "Name must be at least 2 characters";
+    }
+
+    // Phone one validation
+    if (!newStaff.phone_one.trim()) {
+      newErrors.phone_one = "Primary phone number is required";
+    } else if (
+      !/^[0-9+\-\s()]{10,15}$/.test(newStaff.phone_one.replace(/\s/g, ""))
+    ) {
+      newErrors.phone_one = "Please enter a valid phone number";
+    }
+
+    // Phone two validation (optional but if provided, must be valid)
+    if (
+      newStaff.phone_two.trim() &&
+      !/^[0-9+\-\s()]{10,15}$/.test(newStaff.phone_two.replace(/\s/g, ""))
+    ) {
+      newErrors.phone_two = "Please enter a valid phone number";
+    }
+
+    // Address one validation
+    if (!newStaff.address_one.trim()) {
+      newErrors.address_one = "Primary address is required";
+    } else if (newStaff.address_one.trim().length < 10) {
+      newErrors.address_one = "Address must be at least 10 characters";
+    }
+
+    // Address two is optional, no validation needed
+
+    // Email validation
     if (!newStaff.email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(newStaff.email)) {
-      newErrors.email = "Email is invalid";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newStaff.email)) {
+      newErrors.email = "Please enter a valid email address";
     }
-    if (!newStaff.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    } else if (!/^\d{10}$/.test(newStaff.phone.replace(/\D/g, ""))) {
-      newErrors.phone = "Phone number is invalid";
+
+    // Profile image validation
+    if (!newStaff.profile) {
+      newErrors.profile = "Profile image is required";
     }
-    if (!newStaff.zone.trim()) newErrors.zone = "Zone is required";
-    if (!newStaff.vehicleType.trim())
-      newErrors.vehicleType = "Vehicle type is required";
-    if (!newStaff.licenseNumber.trim())
-      newErrors.licenseNumber = "License number is required";
+
+    // Vehicle type validation
+    if (!newStaff.vehicle_type.trim()) {
+      newErrors.vehicle_type = "Vehicle type is required";
+    }
+
+    // Vehicle number validation
+    if (!newStaff.vehicle_number.trim()) {
+      newErrors.vehicle_number = "Vehicle number is required";
+    } else if (newStaff.vehicle_number.trim().length < 3) {
+      newErrors.vehicle_number = "Vehicle number must be at least 3 characters";
+    }
+
+    // Rating validation
+    if (!newStaff.rating.trim()) {
+      newErrors.rating = "Rating is required";
+    } else {
+      const rating = Number.parseFloat(newStaff.rating);
+      if (isNaN(rating) || rating < 1 || rating > 5) {
+        newErrors.rating = "Rating must be between 1 and 5";
+      }
+    }
+
+    // Password validation
+    if (!newStaff.password.trim()) {
+      newErrors.password = "Password is required";
+    } else if (newStaff.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newStaff.password)) {
+      newErrors.password =
+        "Password must contain at least one uppercase letter, one lowercase letter, and one number";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (validateForm()) {
-      console.log("Submitting new staff:", newStaff);
-      setShowNewStaffModal(false);
-      setNewStaff({
-        name: "",
-        email: "",
-        phone: "",
-        zone: "",
-        vehicleType: "",
-        licenseNumber: "",
-        emergencyContact: "",
-        address: "",
+    try {
+      if (validateForm()) {
+        console.log("Submitting new staff:", newStaff);
+        const postForm = new FormData();
+        postForm.append("name", newStaff.name);
+        postForm.append("email", newStaff.email);
+        postForm.append("phone_one", newStaff.phone_one);
+        postForm.append("phone_two", newStaff.phone_two);
+        postForm.append("address_one", newStaff.address_one);
+        postForm.append("address_two", newStaff.address_two);
+        postForm.append("vehicle_type", newStaff.vehicle_type);
+        postForm.append("vehicle_number", newStaff.vehicle_number);
+        postForm.append("rating", newStaff.rating);
+        postForm.append("password", newStaff.password);
+        if (newStaff.profile) {
+          postForm.append("profile", newStaff.profile);
+        }
+        // console.log(postForm);
+        const response = await axios.post(
+          `${backendDomainName}/api/admin/addDelivery`,
+          postForm,
+          {
+            withCredentials: true,
+          }
+        );
+
+        if (response.status === 200 || response.status === 201) {
+          setShowNewStaffModal(false);
+          setNewStaff({
+            name: "",
+            phone_one: "",
+            phone_two: "",
+            address_one: "",
+            address_two: "",
+            email: "",
+            profile: null,
+            vehicle_type: "",
+            vehicle_number: "",
+            rating: "",
+            password: "",
+          });
+          setProfilePreview(null);
+          alert("Delivery staff added successfully!");
+        }
+      } else {
+        return;
+      }
+    } catch (error) {
+      console.log("error in handleSubmit:", error);
+      setErrors({
+        form: "An error occured while adding new staff. Pleast try again",
       });
-      alert("Delivery staff added successfully!");
     }
+  };
+
+  const handleSearch = () => {
+    // Search functionality is now triggered only by button click
+    // The filteredStaff already uses searchTerm, so no additional logic needed
+    console.log("Searching for:", searchTerm);
   };
 
   const renderStars = (rating) => {
@@ -213,7 +300,44 @@ const DeliveryStaffManagement = () => {
       />
     ));
   };
+  const fetchApi = async (mySearchTerm?: string) => {
+    try {
+      const result = await checkAuth();
+      const tokenStatus: boolean = result.status;
+      const myUserData: UserType | undefined = result.data;
+      if (myUserData != undefined && myUserData.role !== "admin") {
+        navigate("/login");
+      }
+      if (!tokenStatus) {
+        navigate("/login");
+        return;
+      }
+      let uri: string;
+      if (mySearchTerm === undefined || mySearchTerm === "") {
+        uri = `${backendDomainName}/api/admin/delivery`;
+      } else {
+        uri = `${backendDomainName}/api/admin/delivery?search=${mySearchTerm}`;
+      }
+      const response = await axios.get(uri, {
+        withCredentials: true,
+      });
+      console.log(response.data);
+      dispatch(setDeliveries(response.data.data));
+      dispatch(setDeliveryPageCounts(response.data.counts));
 
+      setOnlineCount(response.data.counts.online_deli);
+      setOfflineCount(response.data.counts.offline_deli);
+      setTotalDeliveries(response.data.counts.total_deli);
+      setTotalEarnings(response.data.counts.totalEarnings);
+      setDeliveryStaff(response.data.data);
+    } catch (error) {
+      console.error("Error in fetchApi:", error);
+      setErrors(true);
+    }
+  };
+  useEffect(() => {
+    fetchApi();
+  }, []);
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -283,7 +407,7 @@ const DeliveryStaffManagement = () => {
                   Today's Earnings
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  ${totalEarnings}
+                  Ks {Number(totalEarnings)}
                 </p>
               </div>
             </div>
@@ -308,15 +432,24 @@ const DeliveryStaffManagement = () => {
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="relative w-full md:w-96">
-              <input
-                type="text"
-                placeholder="Search staff or zones..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
-              />
-              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <div className="flex items-center space-x-3 w-full md:w-auto">
+              <div className="relative flex-1 md:w-96">
+                <input
+                  type="text"
+                  placeholder="Search staff or zones..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
+                />
+                <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl flex items-center whitespace-nowrap"
+              >
+                <FaSearch className="mr-2" />
+                Search
+              </button>
             </div>
 
             <div className="flex items-center space-x-4">
@@ -379,9 +512,35 @@ const DeliveryStaffManagement = () => {
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                          {staff.name.charAt(0)}
-                        </div>
+                        {staff.profile ? (
+                          <img
+                            src={
+                              staff.profile
+                                ? `http://localhost:1500/${staff.profile}`
+                                : "/placeholder.svg"
+                            }
+                            alt={`${staff.name} profile`}
+                            className="h-12 w-12 flex-shrink-0 rounded-xl object-cover shadow-lg border-2 border-emerald-200"
+                            onError={(e) => {
+                              // Fallback to default avatar if image fails to load
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        {!staff.profile && (
+                          <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                            {staff.name.charAt(0)}
+                          </div>
+                        )}
+                        {staff.profile && (
+                          <div
+                            className="h-12 w-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 items-center justify-center text-white font-bold text-lg shadow-lg"
+                            style={{ display: "none" }}
+                          >
+                            {staff.name.charAt(0)}
+                          </div>
+                        )}
                         <div className="ml-4">
                           <div className="text-sm font-semibold text-gray-900">
                             {staff.name}
@@ -401,17 +560,17 @@ const DeliveryStaffManagement = () => {
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${
-                          staff.status === "Online"
+                          staff.account_status === "Online"
                             ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                             : "bg-gray-100 text-gray-800 border-gray-200"
                         }`}
                       >
-                        {staff.status}
+                        {staff.account_status}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-semibold text-green-600">
-                        {staff.earningsToday}
+                        {staff.today_profit}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -431,7 +590,7 @@ const DeliveryStaffManagement = () => {
                       <div className="flex justify-end space-x-2">
                         <button
                           onClick={() =>
-                            navigate(`/admin/delivery/${staff.id}`)
+                            navigate(`/admin/delivery/view/${staff.id}`)
                           }
                           className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center"
                         >
@@ -440,7 +599,7 @@ const DeliveryStaffManagement = () => {
                         </button>
                         <button
                           onClick={() =>
-                            navigate(`/admin/delivery/assign-area/${staff.id}`)
+                            navigate(`/admin/delivery/area/${staff.id}`)
                           }
                           className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center"
                         >
@@ -502,11 +661,11 @@ const DeliveryStaffManagement = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4 py-8">
               <div
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-auto border border-gray-100 transform transition-all"
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-auto border border-gray-100 transform transition-all max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Modal Header */}
-                <div className="px-8 py-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-t-2xl">
+                <div className="px-8 py-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-t-2xl sticky top-0 z-10">
                   <div className="flex items-center justify-between">
                     <h3 className="text-2xl font-bold text-white flex items-center">
                       <FaMotorcycle className="mr-3" />
@@ -530,6 +689,7 @@ const DeliveryStaffManagement = () => {
                 <div className="p-8">
                   <form onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      {/* Name */}
                       <div className="space-y-2">
                         <label
                           htmlFor="name"
@@ -559,6 +719,67 @@ const DeliveryStaffManagement = () => {
                         )}
                       </div>
 
+                      {/* Phone One */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="phone_one"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaPhone className="mr-2 text-emerald-500" />
+                          Primary Phone*
+                        </label>
+                        <input
+                          type="text"
+                          name="phone_one"
+                          id="phone_one"
+                          value={newStaff.phone_one}
+                          onChange={handleInputChange}
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.phone_one
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-emerald-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          placeholder="Enter primary phone number"
+                        />
+                        {errors.phone_one && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.phone_one}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Phone Two */}
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="phone_two"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaPhone className="mr-2 text-emerald-500" />
+                          Secondary Phone
+                        </label>
+                        <input
+                          type="text"
+                          name="phone_two"
+                          id="phone_two"
+                          value={newStaff.phone_two}
+                          onChange={handleInputChange}
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.phone_two
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-emerald-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          placeholder="Enter secondary phone number (optional)"
+                        />
+                        {errors.phone_two && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.phone_two}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Email */}
                       <div className="space-y-2">
                         <label
                           htmlFor="email"
@@ -588,167 +809,218 @@ const DeliveryStaffManagement = () => {
                         )}
                       </div>
 
-                      <div className="space-y-2">
+                      {/* Address One */}
+                      <div className="space-y-2 sm:col-span-2">
                         <label
-                          htmlFor="phone"
-                          className="flex items-center text-sm font-semibold text-gray-700"
-                        >
-                          <FaPhone className="mr-2 text-emerald-500" />
-                          Phone Number*
-                        </label>
-                        <input
-                          type="text"
-                          name="phone"
-                          id="phone"
-                          value={newStaff.phone}
-                          onChange={handleInputChange}
-                          className={`block w-full rounded-xl border-2 ${
-                            errors.phone
-                              ? "border-red-300 ring-2 ring-red-100"
-                              : "border-gray-200 focus:border-emerald-500"
-                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
-                          placeholder="(123) 456-7890"
-                        />
-                        {errors.phone && (
-                          <p className="mt-1 text-sm text-red-600 flex items-center">
-                            <span className="mr-1">⚠️</span>
-                            {errors.phone}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="zone"
+                          htmlFor="address_one"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
                           <FaMapMarkerAlt className="mr-2 text-emerald-500" />
-                          Delivery Zone*
+                          Primary Address*
                         </label>
-                        <select
-                          name="zone"
-                          id="zone"
-                          value={newStaff.zone}
+                        <input
+                          type="text"
+                          name="address_one"
+                          id="address_one"
+                          value={newStaff.address_one}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.zone
+                            errors.address_one
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-emerald-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
-                        >
-                          <option value="">Select a zone</option>
-                          <option value="Manhattan">Manhattan</option>
-                          <option value="Brooklyn">Brooklyn</option>
-                          <option value="Queens">Queens</option>
-                          <option value="Bronx">Bronx</option>
-                          <option value="Staten Island">Staten Island</option>
-                        </select>
-                        {errors.zone && (
+                          placeholder="Enter primary address"
+                        />
+                        {errors.address_one && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.zone}
+                            {errors.address_one}
                           </p>
                         )}
                       </div>
 
+                      {/* Address Two */}
+                      <div className="space-y-2 sm:col-span-2">
+                        <label
+                          htmlFor="address_two"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaMapMarkerAlt className="mr-2 text-emerald-500" />
+                          Secondary Address
+                        </label>
+                        <input
+                          type="text"
+                          name="address_two"
+                          id="address_two"
+                          value={newStaff.address_two}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-emerald-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white"
+                          placeholder="Enter secondary address (optional)"
+                        />
+                      </div>
+
+                      {/* Profile Image */}
+                      <div className="space-y-2 sm:col-span-2">
+                        <label
+                          htmlFor="profile"
+                          className="flex items-center text-sm font-semibold text-gray-700"
+                        >
+                          <FaUpload className="mr-2 text-emerald-500" />
+                          Profile Image*
+                        </label>
+                        <div className="flex items-center space-x-4">
+                          <input
+                            type="file"
+                            name="profile"
+                            id="profile"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className={`block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 ${
+                              errors.profile ? "border-red-300" : ""
+                            }`}
+                          />
+                          {profilePreview && (
+                            <div className="flex-shrink-0">
+                              <img
+                                src={profilePreview || "/placeholder.svg"}
+                                alt="Profile preview"
+                                className="h-16 w-16 rounded-xl object-cover border-2 border-emerald-200"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        {errors.profile && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.profile}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Vehicle Type */}
                       <div className="space-y-2">
                         <label
-                          htmlFor="vehicleType"
+                          htmlFor="vehicle_type"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
                           <FaMotorcycle className="mr-2 text-emerald-500" />
                           Vehicle Type*
                         </label>
                         <select
-                          name="vehicleType"
-                          id="vehicleType"
-                          value={newStaff.vehicleType}
+                          name="vehicle_type"
+                          id="vehicle_type"
+                          value={newStaff.vehicle_type}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.vehicleType
+                            errors.vehicle_type
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-emerald-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
                         >
                           <option value="">Select vehicle type</option>
-                          <option value="Motorcycle">Motorcycle</option>
-                          <option value="Bicycle">Bicycle</option>
-                          <option value="Car">Car</option>
-                          <option value="Scooter">Scooter</option>
+                          <option value="ဆိုင်ကယ်">ဆိုင်ကယ်</option>
+                          <option value="စက်ဘီး">စက်ဘီး</option>
+                          <option value="ကား">ကား</option>
                         </select>
-                        {errors.vehicleType && (
+                        {errors.vehicle_type && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.vehicleType}
+                            {errors.vehicle_type}
                           </p>
                         )}
                       </div>
 
+                      {/* Vehicle Number */}
                       <div className="space-y-2">
                         <label
-                          htmlFor="licenseNumber"
+                          htmlFor="vehicle_number"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaUser className="mr-2 text-emerald-500" />
-                          License Number*
+                          <FaMotorcycle className="mr-2 text-emerald-500" />
+                          Vehicle Number*
                         </label>
                         <input
                           type="text"
-                          name="licenseNumber"
-                          id="licenseNumber"
-                          value={newStaff.licenseNumber}
+                          name="vehicle_number"
+                          id="vehicle_number"
+                          value={newStaff.vehicle_number}
                           onChange={handleInputChange}
                           className={`block w-full rounded-xl border-2 ${
-                            errors.licenseNumber
+                            errors.vehicle_number
                               ? "border-red-300 ring-2 ring-red-100"
                               : "border-gray-200 focus:border-emerald-500"
                           } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
-                          placeholder="Enter license number"
+                          placeholder="Enter vehicle number"
                         />
-                        {errors.licenseNumber && (
+                        {errors.vehicle_number && (
                           <p className="mt-1 text-sm text-red-600 flex items-center">
                             <span className="mr-1">⚠️</span>
-                            {errors.licenseNumber}
+                            {errors.vehicle_number}
                           </p>
                         )}
                       </div>
 
+                      {/* Rating */}
                       <div className="space-y-2">
                         <label
-                          htmlFor="emergencyContact"
+                          htmlFor="rating"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaPhone className="mr-2 text-emerald-500" />
-                          Emergency Contact
+                          <FaStar className="mr-2 text-emerald-500" />
+                          Initial Rating*
                         </label>
                         <input
-                          type="text"
-                          name="emergencyContact"
-                          id="emergencyContact"
-                          value={newStaff.emergencyContact}
+                          type="number"
+                          name="rating"
+                          id="rating"
+                          min="1"
+                          max="5"
+                          step="0.1"
+                          value={newStaff.rating}
                           onChange={handleInputChange}
-                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-emerald-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white"
-                          placeholder="Emergency contact number"
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.rating
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-emerald-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          placeholder="Enter rating (1-5)"
                         />
+                        {errors.rating && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.rating}
+                          </p>
+                        )}
                       </div>
 
-                      <div className="space-y-2 sm:col-span-2">
+                      {/* Password */}
+                      <div className="space-y-2">
                         <label
-                          htmlFor="address"
+                          htmlFor="password"
                           className="flex items-center text-sm font-semibold text-gray-700"
                         >
-                          <FaMapMarkerAlt className="mr-2 text-emerald-500" />
-                          Address
+                          <FaLock className="mr-2 text-emerald-500" />
+                          Password*
                         </label>
                         <input
-                          type="text"
-                          name="address"
-                          id="address"
-                          value={newStaff.address}
+                          type="password"
+                          name="password"
+                          id="password"
+                          value={newStaff.password}
                           onChange={handleInputChange}
-                          className="block w-full rounded-xl border-2 border-gray-200 focus:border-emerald-500 px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white"
-                          placeholder="Enter full address"
+                          className={`block w-full rounded-xl border-2 ${
+                            errors.password
+                              ? "border-red-300 ring-2 ring-red-100"
+                              : "border-gray-200 focus:border-emerald-500"
+                          } px-4 py-3 shadow-sm focus:ring-2 focus:ring-emerald-100 transition-all duration-200 bg-gray-50 hover:bg-white`}
+                          placeholder="Enter password"
                         />
+                        {errors.password && (
+                          <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {errors.password}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -756,7 +1028,11 @@ const DeliveryStaffManagement = () => {
                       <div className="flex justify-end space-x-4">
                         <button
                           type="button"
-                          onClick={() => setShowNewStaffModal(false)}
+                          onClick={() => {
+                            setShowNewStaffModal(false);
+                            setProfilePreview(null);
+                            setErrors({});
+                          }}
                           className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium"
                         >
                           Cancel

@@ -23,9 +23,17 @@ interface DeliveryAgent {
 }
 interface DeliveryType {
   deliveries: Array<DeliveryAgent>;
+  online_deli: string | number;
+  offline_deli: string | number;
+  total_deli: string | number;
+  totalEarnings: string | number;
 }
 const initialState: DeliveryType = {
   deliveries: [],
+  online_deli: 0,
+  offline_deli: 0,
+  total_deli: 0,
+  totalEarnings: 0,
 };
 
 export const deliverySlice = createSlice({
@@ -33,11 +41,19 @@ export const deliverySlice = createSlice({
   initialState,
   reducers: {
     setDeliveries: (state, action): void => {
-      console.log(action.payload, state);
+      state.deliveries = action.payload;
+    },
+    setDeliveryPageCounts: (state, action): void => {
+      state.offline_deli = action.payload.offline_deli;
+      state.online_deli = action.payload.online_deli;
+      state.total_deli = action.payload.total_deli;
+      state.totalEarnings = action.payload.totalEarnings;
     },
     removeDlivery: (state, action): void => {
       console.log(action.payload);
     },
   },
 });
+export const { setDeliveries, setDeliveryPageCounts, removeDlivery } =
+  deliverySlice.actions;
 export default deliverySlice.reducer;
