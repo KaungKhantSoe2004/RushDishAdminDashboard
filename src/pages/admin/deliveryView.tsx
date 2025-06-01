@@ -24,6 +24,7 @@ import {
 } from "react-icons/fa";
 import axios from "axios";
 import dayjs from "dayjs";
+import ProtectRoute from "../../helpers/protectRoute";
 
 // Interfaces
 interface StaffMember {
@@ -206,21 +207,51 @@ function EditStaffModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-
+    console.log(formData);
     try {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // In a real app, you would upload the image first and get the URL
       const updatedFormData = { ...formData };
-
+      const updateFormData = new FormData();
+      updateFormData.append("id", formData.id);
+      updateFormData.append("name", formData.name);
+      updateFormData.append("email", formData.email);
+      updateFormData.append("phone_one", formData.phone_one);
+      updateFormData.append("phone_two", formData.phone_two);
+      updateFormData.append("address_one", formData.address_one);
+      updateFormData.append("address_two", formData.address_two);
+      updateFormData.append("vehicle_type", formData.vehicle_type);
+      updateFormData.append("vehicle_number", formData.vehicle_number);
+      updateFormData.append("rating", formData.rating.toString());
+      updateFormData.append("status", formData.account_status);
       if (selectedImage) {
-        updatedFormData.profileImage = imagePreview || undefined;
+        updateFormData.append("profile", selectedImage);
       }
+      const response = await axios.post(
+        `http://localhost:1500/api/admin/updateDelivery`,
+        updateFormData,
+        {
+          withCredentials: true,
+        }
+      );
+      console.log(response.data);
+      if (response.status != 200) {
+        throw new Error("Failed to update store");
 
+        return;
+      } else {
+        alert("Delivery Agent profile updated Successfully");
+      }
       onSave(updatedFormData);
     } catch (error) {
       console.error("Error saving staff data:", error);
+      if (error.response.data.message) {
+        alert(error.response.data.message);
+      } else {
+        alert("An error occured while updateing ");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -569,7 +600,10 @@ export default function DeliveryView() {
   const fetchData = async () => {
     try {
       setLoading(true);
-
+      if (!ProtectRoute()) {
+        navigate("/login");
+        return;
+      }
       const response = await axios.get(
         `http://localhost:1500/api/admin/eachDelivery/${id}`,
         {

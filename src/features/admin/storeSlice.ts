@@ -38,6 +38,15 @@ const storeSlice = createSlice({
     setStore: (state, action) => {
       state.stores = action.payload;
     },
+    setReduxStoresActiveCount: (state, action) => {
+      state.activeStoresCount = action.payload;
+    },
+    setReduxStoresPendingCount: (state, action) => {
+      state.pendingStoresCount = action.payload;
+    },
+    setReduxStoresSuspendedCount: (state, action) => {
+      state.suspendStoresCount = action.payload;
+    },
     setReduxStorePageStoreCount: (state, action) => {
       state.totalStoresCount = action.payload.total;
       state.activeStoresCount = action.payload.active;
@@ -59,6 +68,9 @@ const storeSlice = createSlice({
 export const {
   setStore,
   setReduxStorePageStoreCount,
+  setReduxStoresActiveCount,
+  setReduxStoresPendingCount,
+  setReduxStoresSuspendedCount,
   storeLogout,
   setReduxPopularStores,
   setReduxStoreCount,

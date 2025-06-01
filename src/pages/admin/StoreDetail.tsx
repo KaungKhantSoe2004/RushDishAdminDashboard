@@ -6,6 +6,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaTrash } from "react-icons/fa6";
+import ProtectRoute from "../../helpers/protectRoute";
 
 interface Store {
   id: number;
@@ -498,7 +499,10 @@ export default function StoreDetailPage() {
     try {
       setLoading(true);
       setError(null);
-
+      if (!ProtectRoute()) {
+        navigate("/login");
+        return;
+      }
       // Replace with your actual API call
       const response = await axios.get(
         `http://localhost:1500/api/admin/eachStore/${storeId}`,
@@ -559,7 +563,6 @@ export default function StoreDetailPage() {
         formData.append("storeLogo", file);
       }
       console.log(formData);
-
       const response = await axios.post(
         `http://localhost:1500/api/admin/updateStore`,
         formData,
@@ -578,6 +581,11 @@ export default function StoreDetailPage() {
       setValidationErrors({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update store");
+      if (err.response.data.message) {
+        alert(err.response.data.message);
+      } else {
+        alert("failed to update store");
+      }
     }
   };
 

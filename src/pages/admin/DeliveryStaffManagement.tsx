@@ -29,14 +29,20 @@ import {
   setDeliveries,
   setDeliveryPageCounts,
 } from "../../features/admin/deliverySlice";
+import InternalServerError from "../error/500";
+import ProtectRoute from "../../helpers/protectRoute";
 
 const DeliveryStaffManagement = () => {
+  const [isServerError, setIsServerError] = useState(false);
+  const [pages, setPages] = useState([1]);
+  const [page, setPage] = useState(1);
   const backendDomainName: string = "http://localhost:1500";
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewStaffModal, setShowNewStaffModal] = useState(false);
   const ReduxDelivery = useSelector((store: RootState) => store.delivery);
+  const [loading, setLoading] = useState(false);
   const [onlineCount, setOnlineCount] = useState(ReduxDelivery.online_deli);
   const [offlineCount, setOfflineCount] = useState(ReduxDelivery.offline_deli);
   const [totalDeliveries, setTotalDeliveries] = useState(
@@ -69,15 +75,11 @@ const DeliveryStaffManagement = () => {
 
   // Filter delivery staff based on search term and status filter
   const filteredStaff = deliveryStaff.filter((staff) => {
-    const matchesSearch =
-      staff.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      staff.zone.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesStatus =
       statusFilter === "all" ||
       staff.status.toLowerCase() === statusFilter.toLowerCase();
 
-    return matchesSearch && matchesStatus;
+    return matchesStatus;
   });
 
   // Count online and offline staff
@@ -272,12 +274,21 @@ const DeliveryStaffManagement = () => {
           });
           setProfilePreview(null);
           alert("Delivery staff added successfully!");
+        } else {
+          if (response.status < 600) {
+            alert("Error: " + response.data.message);
+          }
+          return;
         }
       } else {
         return;
       }
     } catch (error) {
-      console.log("error in handleSubmit:", error);
+      if (error.response.data.message) {
+        alert(error.response.data.message);
+      } else {
+        alert("An Error occured while adding new agent");
+      }
       setErrors({
         form: "An error occured while adding new staff. Pleast try again",
       });
@@ -285,9 +296,7 @@ const DeliveryStaffManagement = () => {
   };
 
   const handleSearch = () => {
-    // Search functionality is now triggered only by button click
-    // The filteredStaff already uses searchTerm, so no additional logic needed
-    console.log("Searching for:", searchTerm);
+    fetchApi(searchTerm, "");
   };
 
   const renderStars = (rating) => {
@@ -300,21 +309,19 @@ const DeliveryStaffManagement = () => {
       />
     ));
   };
-  const fetchApi = async (mySearchTerm?: string) => {
+  const fetchApi = async (mySearchTerm?: string, paginationNumber?: string) => {
     try {
-      const result = await checkAuth();
-      const tokenStatus: boolean = result.status;
-      const myUserData: UserType | undefined = result.data;
-      if (myUserData != undefined && myUserData.role !== "admin") {
-        navigate("/login");
-      }
-      if (!tokenStatus) {
+      setLoading(true);
+
+      if (!ProtectRoute()) {
         navigate("/login");
         return;
       }
       let uri: string;
-      if (mySearchTerm === undefined || mySearchTerm === "") {
+      if (mySearchTerm == "" && paginationNumber == "") {
         uri = `${backendDomainName}/api/admin/delivery`;
+      } else if (paginationNumber !== "" && paginationNumber !== undefined) {
+        uri = `${backendDomainName}/api/admin/delivery?page=${paginationNumber}`;
       } else {
         uri = `${backendDomainName}/api/admin/delivery?search=${mySearchTerm}`;
       }
@@ -330,15 +337,31 @@ const DeliveryStaffManagement = () => {
       setTotalDeliveries(response.data.counts.total_deli);
       setTotalEarnings(response.data.counts.totalEarnings);
       setDeliveryStaff(response.data.data);
+      setPages(response.data.pagination.pages);
+      setPage(response.data.pagination.page);
+      setLoading(false);
     } catch (error) {
-      console.error("Error in fetchApi:", error);
+      setIsServerError(true);
       setErrors(true);
+      setLoading(false);
     }
   };
   useEffect(() => {
-    fetchApi();
+    fetchApi("", "");
   }, []);
-  return (
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading store details...</p>
+        </div>
+      </div>
+    );
+  }
+  return isServerError ? (
+    <InternalServerError />
+  ) : (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
@@ -438,7 +461,12 @@ const DeliveryStaffManagement = () => {
                   type="text"
                   placeholder="Search staff or zones..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (e.target.value == "") {
+                      fetchApi("", "");
+                    }
+                  }}
                   className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
                 />
                 <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -629,9 +657,8 @@ const DeliveryStaffManagement = () => {
                 <div>
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">1</span> to{" "}
-                    <span className="font-medium">{filteredStaff.length}</span>{" "}
-                    of{" "}
-                    <span className="font-medium">{filteredStaff.length}</span>{" "}
+                    <span className="font-medium">{10}</span> of{" "}
+                    <span className="font-medium">{totalDeliveries}</span>{" "}
                     results
                   </p>
                 </div>
@@ -640,9 +667,21 @@ const DeliveryStaffManagement = () => {
                     <button className="relative inline-flex items-center px-4 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                       Previous
                     </button>
-                    <button className="relative inline-flex items-center px-4 py-2 border border-emerald-500 bg-emerald-50 text-sm font-medium text-emerald-600">
-                      1
-                    </button>
+                    {pages?.map((pageNumber, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          fetchApi("", pageNumber.toString());
+                        }}
+                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300  text-sm font-medium  hover:bg-gray-500 ${
+                          pageNumber == page
+                            ? "bg-blue-800 text-white"
+                            : "bg-white text-gray-700"
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
                     <button className="relative inline-flex items-center px-4 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                       Next
                     </button>

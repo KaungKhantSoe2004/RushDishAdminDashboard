@@ -33,10 +33,14 @@ import { useDispatch } from "react-redux";
 import InternalServerError from "../error/500";
 import {
   setReduxStorePageStoreCount,
+  setReduxStoresActiveCount,
+  setReduxStoresPendingCount,
+  setReduxStoresSuspendedCount,
   setStore,
 } from "../../features/admin/storeSlice";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../store";
+import ProtectRoute from "../../helpers/protectRoute";
 
 interface Store {
   id: string;
@@ -69,6 +73,7 @@ interface FormErrors {
 
 const StoresManagement = () => {
   const backendDomainName: string = "http://localhost:1500";
+
   const navigate = useNavigate();
   const [isSearch, setIsSearch] = useState(false);
   const dispatch = useDispatch();
@@ -77,7 +82,9 @@ const StoresManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNewStoreModal, setShowNewStoreModal] = useState(false);
   const [pages, setPages] = useState([1]);
+  const [page, setPage] = useState(1);
   const [loadingStoreId, setLoadingStoreId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [newStore, setNewStore] = useState<NewStore>({
     name: "",
@@ -223,9 +230,9 @@ const StoresManagement = () => {
   // Handle store status change with proper state isolation
   const handleStatusChange = async (
     storeId: string,
-    newStatus: "active" | "pending" | "suspended"
+    newStatus: "active" | "pending" | "suspended",
+    currentStatus: string
   ) => {
-    // Prevent multiple simultaneous updates
     if (loadingStoreId) return;
 
     setLoadingStoreId(storeId);
@@ -251,20 +258,37 @@ const StoresManagement = () => {
         dispatch(setStore(updatedStores));
 
         // Recalculate counts
-        const newCounts = {
-          active: updatedStores.filter((s) => s.status === "Active").length,
-          pending: updatedStores.filter((s) => s.status === "Pending").length,
-          suspended: updatedStores.filter((s) => s.status === "Suspended")
-            .length,
-          total: updatedStores.length,
-        };
-
-        setActiveStoresCount(newCounts.active);
-        setPendingStoresCount(newCounts.pending);
-        setSuspendedStoresCount(newCounts.suspended);
-        setTotalStoresCount(newCounts.total);
-
-        dispatch(setReduxStorePageStoreCount(newCounts));
+        if (currentStatus == "active") {
+          if (newStatus == "pending") {
+            setPendingStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresPendingCount(pendingStoresCount));
+          } else {
+            setSuspendedStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresSuspendedCount(suspendedStoresCount));
+          }
+          setActiveStoresCount((prev) => prev - 1);
+          dispatch(setReduxStoresActiveCount(activeStoresCount));
+        } else if (currentStatus == "pending") {
+          if (newStatus == "active") {
+            setActiveStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresActiveCount(activeStoresCount));
+          } else {
+            setSuspendedStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresSuspendedCount(suspendedStoresCount));
+          }
+          setPendingStoresCount((prev) => prev - 1);
+          dispatch(setReduxStoresPendingCount(pendingStoresCount));
+        } else {
+          if (newStatus == "active") {
+            setActiveStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresActiveCount(activeStoresCount));
+          } else {
+            setPendingStoresCount((prev) => prev + 1);
+            dispatch(setReduxStoresPendingCount(pendingStoresCount));
+          }
+          setSuspendedStoresCount((prev) => prev - 1);
+          dispatch(setReduxStoresSuspendedCount(suspendedStoresCount));
+        }
 
         // Show success message
         const actionText =
@@ -274,6 +298,10 @@ const StoresManagement = () => {
             ? "suspended"
             : "set to pending";
         alert(`Store ${actionText} successfully!`);
+      } else {
+        if (response.data.message) {
+          alert(response.data.message);
+        }
       }
     } catch (error) {
       console.error("Error updating store status:", error);
@@ -409,12 +437,19 @@ const StoresManagement = () => {
         setIsFormValid(false);
 
         // Refresh store list
-        fetchApi();
+        fetchApi("", "");
         alert("Store created successfully!");
+      } else {
+        console.log("no ok");
+        return;
+        alert("Store creation failed due to " + response.data.message);
       }
     } catch (error) {
-      console.error("Error creating store:", error);
-      alert("Failed to create store. Please try again.");
+      if (error.response.data.message) {
+        alert(error.response.data.message);
+      } else {
+        alert("Failed to create store. Please try again.");
+      }
     }
   };
 
@@ -455,21 +490,18 @@ const StoresManagement = () => {
     ));
   };
 
-  const fetchApi = async (mySearchTerm?: string) => {
+  const fetchApi = async (mySearchTerm?: string, myPagination?: string) => {
     try {
-      const result = await checkAuth();
-      const tokenStatus: boolean = result.status;
-      const myUserData: UserType | undefined = result.data;
-      if (myUserData != undefined && myUserData.role !== "admin") {
-        navigate("/login");
-      }
-      if (!tokenStatus) {
+      setLoading(true);
+      if (!ProtectRoute()) {
         navigate("/login");
         return;
       }
       let uri: string;
-      if (mySearchTerm === undefined || mySearchTerm === "") {
+      if (myPagination == "" && mySearchTerm === "") {
         uri = `${backendDomainName}/api/admin/stores`;
+      } else if (myPagination !== "" && myPagination !== undefined) {
+        uri = `${backendDomainName}/api/admin/stores?page=${myPagination}`;
       } else {
         uri = `${backendDomainName}/api/admin/stores?search=${mySearchTerm}`;
       }
@@ -479,14 +511,17 @@ const StoresManagement = () => {
       console.log(response.data);
       dispatch(setReduxStorePageStoreCount(response.data.counts));
       setPages(response.data.pagination.pages);
+      setPage(response.data.pagination.page);
       dispatch(setStore(response.data.data));
       setStores(response.data.data);
       setActiveStoresCount(response.data.counts.active);
       setPendingStoresCount(response.data.counts.pending);
       setSuspendedStoresCount(response.data.counts.suspended);
       setTotalStoresCount(response.data.counts.total);
+      setLoading(false);
     } catch (error) {
       console.error("Error in fetchApi:", error);
+      setLoading(false);
       setIsServerError(true);
     }
   };
@@ -509,7 +544,7 @@ const StoresManagement = () => {
   }, [openDropdownId]);
 
   useEffect(() => {
-    fetchApi();
+    fetchApi("", "");
   }, []);
 
   useEffect(() => {
@@ -518,7 +553,16 @@ const StoresManagement = () => {
       setIsFormValid(false);
     }
   }, [showNewStoreModal]);
-
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading store details...</p>
+        </div>
+      </div>
+    );
+  }
   return isServerError ? (
     <InternalServerError />
   ) : (
@@ -620,7 +664,7 @@ const StoresManagement = () => {
                   setActualSearchTerm(e.target.value);
                   if (e.target.value == "") {
                     setIsSearch(true);
-                    fetchApi();
+                    fetchApi("", "");
                   }
                 }}
                 className="w-full pl-12 pr-4 py-3 rounded-l-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors duration-200"
@@ -629,7 +673,7 @@ const StoresManagement = () => {
               <button
                 onClick={() => {
                   setIsSearch(true);
-                  fetchApi(actualSearchTerm);
+                  fetchApi(actualSearchTerm, "");
                 }}
                 className="px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-xl py-3 flex items-center space-x-2 border border-indigo-600 transition-colors duration-200"
               >
@@ -756,7 +800,11 @@ const StoresManagement = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "active");
+                                    handleStatusChange(
+                                      store.id,
+                                      "active",
+                                      store.status
+                                    );
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-emerald-50 flex items-center transition-colors duration-200"
                                 >
@@ -769,7 +817,11 @@ const StoresManagement = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "pending");
+                                    handleStatusChange(
+                                      store.id,
+                                      "pending",
+                                      store.status
+                                    );
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-amber-50 flex items-center transition-colors duration-200"
                                 >
@@ -782,7 +834,11 @@ const StoresManagement = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(store.id, "suspended");
+                                    handleStatusChange(
+                                      store.id,
+                                      "suspended",
+                                      store.status
+                                    );
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center transition-colors duration-200"
                                 >
@@ -848,7 +904,7 @@ const StoresManagement = () => {
                   <p className="text-sm text-gray-700">
                     Showing <span className="font-medium">1</span> to{" "}
                     <span className="font-medium">{filteredStores.length}</span>{" "}
-                    of <span className="font-medium">{stores.length}</span>{" "}
+                    of <span className="font-medium">{totalStoresCount}</span>{" "}
                     results
                   </p>
                 </div>
@@ -860,8 +916,15 @@ const StoresManagement = () => {
 
                     {pages.map((each) => (
                       <button
+                        onClick={() => {
+                          fetchApi("", each.toString());
+                        }}
                         key={each}
-                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300  text-sm font-medium  hover:bg-gray-500 ${
+                          each == page
+                            ? "bg-blue-800 text-white"
+                            : "bg-white text-gray-700"
+                        }`}
                       >
                         {each}
                       </button>
@@ -1215,7 +1278,7 @@ const StoresManagement = () => {
                               name="profileImg"
                               id="profileImg"
                               onChange={handleFileChange}
-                              className="hidden"
+                              // className="hidden"
                               accept="image/*"
                               required
                             />

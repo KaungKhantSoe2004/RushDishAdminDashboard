@@ -91,6 +91,9 @@ const OrderSlice = createSlice({
     setReduxRecentOrders: (state, action): void => {
       state.recentOrders = action.payload;
     },
+    setReduxOrders: (state, action): void => {
+      state.orders = action.payload;
+    },
   },
 });
 export const {
@@ -98,5 +101,6 @@ export const {
   setDashboardCount,
   setReduxOrdersToday,
   setReduxRecentOrders,
+  setReduxOrders,
 } = OrderSlice.actions;
 export default OrderSlice.reducer;

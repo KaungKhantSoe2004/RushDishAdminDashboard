@@ -27,6 +27,7 @@ import {
   setReduxRecentOrders,
 } from "../../features/admin/ordersSlice";
 import { setReduxActiveUserCount } from "../../features/admin/usersSlice";
+import ProtectRoute from "../../helpers/protectRoute";
 
 const AdminDashboard = () => {
   const dispatch = useDispatch();
@@ -53,15 +54,19 @@ const AdminDashboard = () => {
 
   const fetchApi = async () => {
     try {
-      const result = await checkAuth();
-      const tokenStatus: boolean = result.status;
-      const myUserData: UserType | undefined = result.data;
-      if (myUserData != undefined && myUserData.role !== "admin") {
-        navigate("/login");
-      }
-      if (!tokenStatus) {
-        navigate("/login");
+      // const result = await checkAuth();
+      // const tokenStatus: boolean = result.status;
+      // const myUserData: UserType | undefined = result.data;
+      // if (myUserData != undefined && myUserData.role !== "admin") {
+      //   navigate("/login");
+      // }
+      // if (!tokenStatus) {
+      //   navigate("/login");
 
+      //   return;
+      // }
+      if (!ProtectRoute()) {
+        navigate("/login");
         return;
       }
       const response = await axios.get(
